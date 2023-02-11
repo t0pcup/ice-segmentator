@@ -305,11 +305,15 @@ class CrossValDataSet(Dataset):
         img = np.load(f'{self.datapath}/data/{file_name}')
         label = np.load(f'{self.datapath}/label/{file_name}')
 
-        # min_v, max_v = np.min(img), np.max(img)
-        min_v, max_v = -84.64701, 4.379311  # TODO: сравнить
-        img = ((img + min_v) / (abs(max_v) - abs(min_v) + 1) * 255).astype(np.uint8)
+        mean, std = np.zeros(img.shape[0]), np.zeros(img.shape[0])
+        for channel in range(img.shape[0]):
+            mean[channel] = np.mean(img[channel, :, :])
+            std[channel] = np.std(img[channel, :, :])
 
-        img = img.transpose(1, 2, 0)
+        norm = torchvision.transforms.Normalize(mean, std, inplace=True)
+        norm.forward(torch.from_numpy(img))
+
+        img = img.transpose((1, 2, 0))
         if self.transforms:
             augmented = self.transforms_test(image=img, mask=label[:, :])
         else:
@@ -331,17 +335,17 @@ def coll_fn(batch_):
 
 
 transforms = [
-    albumentations.Resize(1000, 1000, p=0.5, interpolation=3),
+    # albumentations.Resize(1000, 1000, p=0.5, interpolation=3),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
-    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0)
+    albumentations.RandomCrop(1280, 1280, always_apply=False, p=1.0)
 ]
 transforms_test = [
-    albumentations.Resize(1000, 1000, p=0.5, interpolation=3),
+    # albumentations.Resize(1000, 1000, p=0.5, interpolation=3),
     # albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
-    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0)
+    albumentations.RandomCrop(1280, 1280, always_apply=False, p=1.0)
 ]
 
 transforms_val = [albumentations.Resize(1280, 1280, interpolation=3)]
@@ -359,7 +363,7 @@ model_ft = smp.DeepLabV3(
     encoder_name="timm-mobilenetv3_small_minimal_100",  # efficientnet-b0
     encoder_weights=None,
     in_channels=4,
-    classes=14,
+    classes=6,
 )
 
 model_ft = model_ft.to(device)
@@ -368,12 +372,12 @@ criterion = nn.CrossEntropyLoss()
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([[1, 0.75, 1.25]]))
 # criterion = torchvision.ops.sigmoid_focal_loss
 
-# optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
-optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01)
+optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)  # todo !!!!!!!!!
+# optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
 model_ft, iou = train_model(model_ft, device, dataloader, criterion, optimizer_ft, path_to_save, model_name,
-                            dataset_sizes, 3, False)
+                            dataset_sizes, 100, False)
 
 torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_test.pth')
 

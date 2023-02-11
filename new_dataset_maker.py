@@ -264,7 +264,7 @@ for f in white_list_shapes:
                                         merge_alg=MergeAlg.replace,
                                         dtype=np.int16)
         # Plot raster
-        if len(geom_value) > 4:
+        if len(geom_value) > 5:
             fig, ax = plt.subplots(1, figsize=(10, 10))
             show(rasterized, ax=ax)
             plt.gca().invert_yaxis()
