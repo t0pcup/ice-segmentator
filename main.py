@@ -17,20 +17,13 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
-# print(f"Is CUDA supported by this system? {torch.cuda.is_available()}")
-# print(f"CUDA version: {torch.version.cuda}")
-#
-# cuda_id = torch.cuda.current_device()
-# print(f"ID of current CUDA device:{torch.cuda.current_device()}")
-#
-# print(f"Name of current CUDA device:{torch.cuda.get_device_name(cuda_id)}")
-
 loss_history, test_loss_history = [], []
 f1_history, test_f1_history = [], []
 miou_history, test_miou_history = [], []
 acc_history, test_acc_history = [], []
 
 
+# os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:1024"
 # roc_history, test_roc_history = [], [] TODO
 
 
@@ -49,7 +42,7 @@ def fin_plotter(train_h, test_h, color, title, xt_, yt_, xl_, yl_):
 
 
 def double_exponential_smoothing(data, alpha=0.0, beta=0.0):
-    result = [data[0]]
+    result, level, trend = [data[0]], 0, 0
     for n in range(1, len(data) + 1):
         if n == 1:
             level, trend = data[0], data[1] - data[0]
@@ -62,16 +55,6 @@ def double_exponential_smoothing(data, alpha=0.0, beta=0.0):
         result.append(level + trend)
 
     return [result[0:len(result) - 1], f"Double exp: a{alpha}, b{beta}"]
-
-
-def clear_gpu():
-    import gc
-    try:
-        del model_ft
-    except NameError:
-        print('There is no model with that name')
-    gc.collect()
-    torch.cuda.empty_cache()
 
 
 def tversky_loss(true, logits, alpha=0.5, beta=0.5, eps=1e-7):
@@ -134,7 +117,7 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
             running_pix_f1 = 0.0
             running_pix_acc = 0.0
             running_miou = 0.0
-            running_roc = 0.0
+            # running_roc = 0.0
             ls = np.array([])
             ps = np.array([])
             # Iterate over data.
@@ -147,6 +130,9 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
+                    # print(torch.cuda.memory_summary(device=None, abbreviated=False),
+                    #       torch.cuda.memory_summary(device=None, abbreviated=True))
+
                     outputs = model(inputs)
                     outputs = outputs.to(device)
 
@@ -157,7 +143,9 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
                     # loss = criterion_(labels.unsqueeze(1), outputs['out'])
                     # loss = criterion_(outputs['out'], labels, ce)
                     # loss = criterion_(outputs, labels, ce)
+
                     criterion_ = criterion_.to(device)
+
                     loss = criterion_(outputs, labels)
                     # loss = criterion_(labels.unsqueeze(1), outputs)  # use for dice, tversky and jaccard losses
 
@@ -189,7 +177,7 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
             mean_epoch_pix_f1 = running_pix_f1 / dataset_size[phase]
             epoch_pix_acc = running_pix_acc / dataset_size[phase]
             epoch_miou = running_miou / dataset_size[phase]
-            epoch_roc = running_roc / dataset_size[phase]
+            # epoch_roc = running_roc / dataset_size[phase]
 
             # print('{} Loss: {:.4f} Acc: {:.4f} IoU: {:.4f}'.format(
             #     phase, epoch_loss, epoch_pix_acc, epoch_miou))
@@ -198,13 +186,11 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
                 f1_history.append(mean_epoch_pix_f1)
                 acc_history.append(epoch_pix_acc)
                 miou_history.append(epoch_miou)
-                # roc_history.append(epoch_roc) TODO
             else:
                 test_loss_history.append(epoch_loss)
                 test_f1_history.append(mean_epoch_pix_f1)
                 test_acc_history.append(epoch_pix_acc)
                 test_miou_history.append(epoch_miou)
-                # test_roc_history.append(epoch_roc) TODO
 
             print('{} Loss: {:.4f} F1: {:.4f} Acc: {:.4} IoU: {:.4f}'.format(
                 phase, epoch_loss, mean_epoch_pix_f1, epoch_pix_acc, epoch_miou))
@@ -219,39 +205,11 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
                 else:
                     min_y = min([min(test_f1_history), min(test_miou_history), min(test_acc_history)])
                     max_y = max(test_loss_history)
-            # min(roc_history), min(test_roc_history), TODO
 
             yl = [min_y - 0.1, max_y + 0.1]
             yt = np.arange(yl[0], yl[1], 0.1)
             st = 5 * (1 + int(epo > 70) + int(epo > 150))
             xt = [st * i for i in range((epo % st != 0) + 1 + epo // st)]
-
-            # if epo + 1 == epochs and phase == 'test':
-            #     plt.figure(dpi=250)
-            #     plt.plot(loss_history, color='r', alpha=0.4)
-            #     plt.plot(f1_history, color='g', alpha=0.4)
-            #     plt.plot(acc_history, color='orange', alpha=0.4)
-            #     plt.plot(miou_history, color='b', alpha=0.4)
-            #     # plt.plot(roc_history, color='purple', alpha=0.4) TODO
-            #     plt.plot(test_loss_history, color='r', label='loss')
-            #     plt.plot(test_f1_history, color='g', label='F1')
-            #     plt.plot(test_acc_history, color='orange', label='Acc')
-            #     plt.plot(test_miou_history, color='b', label='IoU')
-            #     # plt.plot(test_roc_history, color='purple', label='ROC') TODO
-            #     plt.xticks(xt)
-            #     plt.yticks(yt)
-            #     plt.xlim(0, epo)
-            #     plt.ylim(*yl)
-            #     plt.grid(True)
-            #     plt.title('Fin plots comparison')
-            #     plt.legend()
-            #     plt.show()
-            #
-            #     fin_plotter(loss_history, test_loss_history, 'r', 'Fin Loss comparison', xt, yt, epo, yl)
-            #     fin_plotter(f1_history, test_f1_history, 'g', 'Fin F1 comparison', xt, yt, epo, yl)
-            #     fin_plotter(miou_history, test_miou_history, 'b', 'Fin IoU comparison', xt, yt, epo, yl)
-            #     fin_plotter(acc_history, test_acc_history, 'orange', 'Fin Acc comparison', xt, yt, epo, yl)
-            #     # fin_plotter(roc_history, test_roc_history, 'orange', 'Fin Acc comparison', xt, yt, epo, yl) TODO
 
             if epo % 10 == 0 or epo + 1 == epochs:
                 plt.figure(dpi=250)
@@ -304,12 +262,14 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
 
 
 test_iou = 0
+# device = 'cpu'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(device)
-batch = 16
+batch = 2
+print(device, batch)
 
 data_dir = r'E:/files'
-classes = ['land', 'water', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'no data', 'ice shelf', 'undefined']
+# other = undefined / land / no data / water
+classes = ['other', '1-3', '4-5', '6-7', '8-10', 'ice shelf']
 path_to_save = r'E:/files/pts'
 os.makedirs(path_to_save, exist_ok=True)
 model_name = 'NewLbl'
@@ -371,26 +331,27 @@ def coll_fn(batch_):
 
 
 transforms = [
-    albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
-    albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
+    albumentations.Resize(1000, 1000, p=0.5, interpolation=3),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
-    albumentations.RandomCrop(256, 256, always_apply=False, p=1.0)
+    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0)
 ]
 transforms_test = [
-    albumentations.Resize(256, 256),
-    albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
+    albumentations.Resize(1000, 1000, p=0.5, interpolation=3),
+    # albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
+    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0)
 ]
+
 transforms_val = [albumentations.Resize(1280, 1280, interpolation=3)]
 
-dataset = {'train': CrossValDataSet(data_dir, transforms_val, 5, 1, 'train', True),
-           'test': CrossValDataSet(data_dir, transforms_val, 5, 1, 'val', False)}
+dataset = {'train': CrossValDataSet(data_dir, transforms, 5, 1, 'train', True),
+           'test': CrossValDataSet(data_dir, transforms_test, 5, 1, 'val', False)}
 dataloader = {'train': DataLoader(dataset['train'], batch_size=batch, shuffle=True, num_workers=0,
-                                  collate_fn=coll_fn),  # , drop_last=True
+                                  collate_fn=coll_fn, drop_last=True),  # , drop_last=True
               'test': DataLoader(dataset['test'], batch_size=batch, shuffle=False, num_workers=0,
-                                 collate_fn=coll_fn)}  # , drop_last=True
+                                 collate_fn=coll_fn, drop_last=True)}  # , drop_last=True
 
 dataset_sizes = {x: len(dataset[x]) for x in ['train', 'test']}
 
@@ -412,14 +373,10 @@ optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
 model_ft, iou = train_model(model_ft, device, dataloader, criterion, optimizer_ft, path_to_save, model_name,
-                            dataset_sizes, 100, False)
+                            dataset_sizes, 3, False)
 
-torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_v0.1.pth')
+torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_test.pth')
+
+# torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_v0.1.pth')
 # torch.save(model_ft.state_dict(), f'{path_to_save}/{model_name}_v3.pth')
-
-# TODO: 1. посмотреть на карте (узнать как наложить labels/masks на карту)
-# 2. f1_score на общей матрице +
-# 3. пересобрать патчи (1.2 -> 2.5) +
-# 4. пилить графики +
-# TODO: * для участка построить карту labels и карту predicts (+img) !!!
 # banned: 2021-06-14_3_1

@@ -3,7 +3,6 @@ import rasterio.warp
 import numpy as np
 import warnings
 from PIL import Image
-import albumentations
 
 warnings.filterwarnings("ignore")
 
@@ -64,8 +63,3 @@ for file in os.listdir(f'{path}view/raw_pred/'):  # f'{path}data/'  # [:40]
         save_tiff(f'{path}view/predict/{name}.tiff', im_dst)
     except Exception:
         print(1)
-
-# path = 'E:/dafuck/'
-# arr = np.array([np.load(f"{path}data/{file.split('.')[0]}.npy") for file in os.listdir(f'{path}label/')])
-#
-# print(arr.shape)

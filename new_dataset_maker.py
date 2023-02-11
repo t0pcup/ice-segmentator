@@ -176,45 +176,40 @@ white_list_images = ['E:/files/view/image/2021-06-14_0_2.tiff', 'E:/files/view/i
                      'E:/files/view/image/2021-10-18_1_4.tiff']
 
 translate_classes_simple = {
-    '55': 1,  # ice free
-    '01': 1,  # open water
-    '02': 1,  # bergy water
+    '55': 0,  # ice free
+    '01': 0,  # open water
+    '02': 0,  # bergy water
 
-    '10': 2,  # 1/10
-    '12': 2,  # 1-2/10
-    '13': 2,  # 1-3/10
+    '10': 1,  # 1/10
+    '12': 1,  # 1-2/10
+    '13': 1,  # 1-3/10
+    '20': 1,  # 2/10
+    '23': 1,  # 2-3/10
+    '24': 1,  # 2-4/10
+    '30': 1,  # 3/10
+    '34': 1,  # 3-4/10
+    '35': 1,  # 3-5/10
 
-    '20': 3,  # 2/10
-    '23': 3,  # 2-3/10
-    '24': 3,  # 2-4/10
+    '40': 2,  # 4/10
+    '45': 2,  # 4-5/10
+    '46': 2,  # 4-6/10
+    '50': 2,  # 5/10
+    '56': 2,  # 5-6/10
+    '57': 2,  # 5-7/10
 
-    '30': 4,  # 3/10
-    '34': 4,  # 3-4/10
-    '35': 4,  # 3-5/10
+    '60': 3,  # 6/10
+    '67': 3,  # 6-7/10
+    '68': 3,  # 6-8/10
+    '70': 3,  # 7/10
+    '78': 3,  # 7-8/10
+    '79': 3,  # 7-9/10
 
-    '40': 5,  # 4/10
-    '45': 5,  # 4-5/10
-    '46': 5,  # 4-6/10
-
-    '50': 6,  # 5/10
-    '56': 6,  # 5-6/10
-    '57': 6,  # 5-7/10
-
-    '60': 7,  # 6/10
-    '67': 7,  # 6-7/10
-    '68': 7,  # 6-8/10
-
-    '70': 8,  # 7/10
-    '78': 8,  # 7-8/10
-    '79': 8,  # 7-9/10
-
-    '80': 9,  # 8/10
-    '89': 9,  # 8-9/10
-    '81': 9,  # 8-10/10
-
-    '90': 10,  # 9/10
-    '91': 10,  # 9-10/10
-    '92': 10,  # 10/10
+    '80': 4,  # 8/10
+    '89': 4,  # 8-9/10
+    '81': 4,  # 8-10/10
+    '90': 4,  # 9/10
+    '91': 4,  # 9-10/10
+    '92': 4,  # 10/10
 }
 
 
@@ -222,11 +217,11 @@ def def_num(it: dict) -> int:
     if it['POLY_TYPE'] == 'L':  # land
         return 0
     if it['POLY_TYPE'] == 'W':  # water
-        return 1
+        return 0
     if it['POLY_TYPE'] == 'N':  # no data
-        return 11
+        return 0
     if it['POLY_TYPE'] == 'S':  # ice shelf / ice of land origin
-        return 12
+        return 5
 
     return translate_classes_simple[it['CT']]  # ice – of any concentration
 
@@ -265,11 +260,11 @@ for f in white_list_shapes:
                                         out_shape=sat_img.shape,
                                         transform=sat_img.transform,
                                         all_touched=True,
-                                        fill=13,  # undefined
+                                        fill=0,  # undefined
                                         merge_alg=MergeAlg.replace,
                                         dtype=np.int16)
         # Plot raster
-        if len(geom_value) > 3:
+        if len(geom_value) > 4:
             fig, ax = plt.subplots(1, figsize=(10, 10))
             show(rasterized, ax=ax)
             plt.gca().invert_yaxis()
