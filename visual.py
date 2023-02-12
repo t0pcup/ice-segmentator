@@ -5,9 +5,11 @@ from matplotlib import pyplot as plt
 from PIL import Image
 import torch
 import torch.nn as nn
+import torchvision
 from torch.utils.data import Dataset, DataLoader
 import albumentations
 import segmentation_models_pytorch as smp
+from main import coll_fn, normalize
 
 transforms_val = [albumentations.Resize(1280, 1280)]
 
@@ -22,39 +24,29 @@ class InferDataset(Dataset):
         return len(self.data_list)
 
     def __getitem__(self, index):
-        img = np.load(f'{self.datapath}/data/{self.data_list[index]}')
-        label = np.load(f'{self.datapath}/label/{self.data_list[index]}')
+        f_name = self.data_list[index]
 
-        min_v, max_v = -84.64701, 4.379311  # TODO: normalize
-        img = ((img + min_v) / (abs(max_v) - abs(min_v) + 1) * 255).astype(np.uint8)
+        img = normalize(np.load(f'{self.datapath}/data/{f_name}'))
+        # img = np.nan_to_num(img) TODO
+        label = np.load(f'{self.datapath}/label/{f_name}')
 
-        img = img.transpose(1, 2, 0)
+        img = img.transpose((1, 2, 0))
         augmented = self.transforms_val(image=img, mask=label[:, :])
         img = augmented['image']
         label = augmented['mask']
+
         img = img.transpose(2, 0, 1)
         return img, label
 
 
-def collate_fn(batch):
-    imgs_, labels_ = [], []
-    for _, sample in enumerate(batch):
-        img, label = sample
-        imgs_.append(torch.from_numpy(img.copy()))
-        labels_.append(torch.from_numpy(label.copy()))
-    return torch.stack(imgs_, 0).type(torch.FloatTensor), torch.stack(labels_, 0).type(torch.LongTensor)
-
-
 def unnormalize(image):
-    np_img = image.numpy()
-    min_v, max_v = -84.64701, 4.379311
-    np_img = ((np_img + min_v) / (abs(max_v) - abs(min_v) + 1) * 255).astype(np.uint8)
+    np_img = normalize(image.numpy())
     np_img = np.transpose(np_img, (1, 2, 0))
     np_img = (np_img * 255).astype(np.uint8)
-    return np_img
+    return np_img.transpose(2, 0, 1)
 
 
-datapath = r'E:/files'
+data_path = r'E:/files'
 palette = np.array([i for i in range(14)])
 print(palette)
 model_path = r'E:/files/pts/NewLbl_v0.1.pth'
@@ -67,15 +59,15 @@ model = smp.DeepLabV3(
     classes=14,
 )
 
-for file_name in os.listdir(datapath + '/label')[:30]:
+for file_name in os.listdir(data_path + '/label')[:30]:
     print(file_name)
 
     model.to(device)
     state_dict = torch.load(model_path)['model_state_dict']
     model.load_state_dict(state_dict, strict=False)
 
-    dataset = InferDataset(datapath, file_name)
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False)  # 30.01.2023 was True
+    dataset = InferDataset(data_path, file_name)
+    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, collate_fn=coll_fn, shuffle=False)  # 30.01.2023 was True
 
     inputs, labels = next(iter(dataloader))
     inputs = inputs.to(device)
