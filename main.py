@@ -17,10 +17,11 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
-loss_history, test_loss_history = [], []
-f1_history, test_f1_history = [], []
-miou_history, test_miou_history = [], []
-acc_history, test_acc_history = [], []
+
+# loss_history, test_loss_history = [], []
+# f1_history, test_f1_history = [], []
+# miou_history, test_miou_history = [], []
+# acc_history, test_acc_history = [], []
 
 
 # os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:1024"
@@ -90,7 +91,7 @@ def tversky_loss(true, logits, alpha=0.5, beta=0.5, eps=1e-7):
     return 1 - (num / (denominate + eps)).mean()
 
 
-def train_model(model, device_, dataset_loader, criterion_, optimizer,
+def train_model(model, device_, dataset_loader, criterion, optimizer,
                 model_path, mod_name, dataset_size, epochs=25, save=False):
     def mean_iou(y_true, y_pred_):
         _and = np.logical_and(y_true, y_pred_).sum()
@@ -98,8 +99,8 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
         return _and / _or
 
     since = time.time()
-    global loss_history, f1_history, miou_history, acc_history
-    global test_loss_history, test_f1_history, test_miou_history, test_acc_history
+    # global loss_history, f1_history, miou_history, acc_history
+    # global test_loss_history, test_f1_history, test_miou_history, test_acc_history
     best_model_wts = copy.deepcopy(model.state_dict())
     best_miou = 0.0
     best_epoch = 0
@@ -130,34 +131,37 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
-                    # print(torch.cuda.memory_summary(device=None, abbreviated=False),
-                    #       torch.cuda.memory_summary(device=None, abbreviated=True))
 
                     outputs = model(inputs)
                     outputs = outputs.to(device)
 
                     # y_pred = torch.argmax(outputs['out'], dim=1)
                     y_pred = torch.argmax(outputs, dim=1)
-                    #                     loss = criterion_(torch.flatten(outputs.permute(0,2,3,1), end_dim=8),
+                    #                     loss = criterion(torch.flatten(outputs.permute(0,2,3,1), end_dim=8),
                     #                                     torch.flatten(labels))
-                    # loss = criterion_(labels.unsqueeze(1), outputs['out'])
-                    # loss = criterion_(outputs['out'], labels, ce)
-                    # loss = criterion_(outputs, labels, ce)
+                    # loss = criterion(labels.unsqueeze(1), outputs['out'])
+                    # loss = criterion(outputs['out'], labels, ce)
+                    # loss = criterion(outputs, labels, ce)
 
-                    criterion_ = criterion_.to(device)
+                    criterion = criterion.to(device)
+                    loss = criterion(outputs, labels)
+                    if loss.isnan():
+                        print(f'loss={loss.detach().numpy()}')
 
-                    loss = criterion_(outputs, labels)
-                    # loss = criterion_(labels.unsqueeze(1), outputs)  # use for dice, tversky and jaccard losses
-
+                    # loss = criterion(labels.unsqueeze(1), outputs)  # use for dice, tversky and jaccard losses
                     # backward + optimize only if in training phase
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
+
                 #                         if scheduler:
                 #                             scheduler.step()
 
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
+                # str = 'running_loss = loss.item() * inputs.size(0) = '
+                # str += f'{loss.item()} * {inputs.size(0)} = {running_loss}'
+                # print(str)
                 labels = labels.float()
 
                 l_ = torch.flatten(labels).cpu().detach().numpy()
@@ -174,70 +178,69 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
                 # running_roc += roc_auc_score(l_, p) * inputs.size(0)
 
             epoch_loss = running_loss / dataset_size[phase]
+            # print('loss4', epoch_loss, running_loss, dataset_size[phase])
             mean_epoch_pix_f1 = running_pix_f1 / dataset_size[phase]
             epoch_pix_acc = running_pix_acc / dataset_size[phase]
             epoch_miou = running_miou / dataset_size[phase]
             # epoch_roc = running_roc / dataset_size[phase]
 
-            # print('{} Loss: {:.4f} Acc: {:.4f} IoU: {:.4f}'.format(
-            #     phase, epoch_loss, epoch_pix_acc, epoch_miou))
-            if phase == 'train':
-                loss_history.append(epoch_loss)
-                f1_history.append(mean_epoch_pix_f1)
-                acc_history.append(epoch_pix_acc)
-                miou_history.append(epoch_miou)
-            else:
-                test_loss_history.append(epoch_loss)
-                test_f1_history.append(mean_epoch_pix_f1)
-                test_acc_history.append(epoch_pix_acc)
-                test_miou_history.append(epoch_miou)
-
             print('{} Loss: {:.4f} F1: {:.4f} Acc: {:.4} IoU: {:.4f}'.format(
-                phase, epoch_loss, mean_epoch_pix_f1, epoch_pix_acc, epoch_miou))
+                phase, epoch_loss, mean_epoch_pix_f1, epoch_pix_acc, epoch_miou), end='\n\n')
 
-            if epo == 0 and phase == 'train':
-                min_y = min([f1_history[0], miou_history[0], acc_history[0]])
-                max_y = loss_history[0]
-            else:
-                if phase == 'train':
-                    min_y = min([min(f1_history), min(miou_history), min(acc_history)])
-                    max_y = max(loss_history)
-                else:
-                    min_y = min([min(test_f1_history), min(test_miou_history), min(test_acc_history)])
-                    max_y = max(test_loss_history)
+            # if phase == 'train':
+            #     loss_history.append(epoch_loss)
+            #     f1_history.append(mean_epoch_pix_f1)
+            #     acc_history.append(epoch_pix_acc)
+            #     miou_history.append(epoch_miou)
+            # else:
+            #     test_loss_history.append(epoch_loss)
+            #     test_f1_history.append(mean_epoch_pix_f1)
+            #     test_acc_history.append(epoch_pix_acc)
+            #     test_miou_history.append(epoch_miou)
 
-            yl = [min_y - 0.1, max_y + 0.1]
-            yt = np.arange(yl[0], yl[1], 0.1)
-            st = 5 * (1 + int(epo > 70) + int(epo > 150))
-            xt = [st * i for i in range((epo % st != 0) + 1 + epo // st)]
-
-            if epo % 10 == 0 or epo + 1 == epochs:
-                plt.figure(dpi=250)
-                choice = phase == 'test'
-                xs = [loss_history, test_loss_history][choice]
-                plt.plot(xs, color='r', label='loss')
-                plt.plot([np.min(xs) for _ in xs], color='r', alpha=0.4)
-
-                xs = [miou_history, test_miou_history][choice]
-                plt.plot(xs, color='b', label='IoU')
-                plt.plot([np.max(xs) for _ in xs], color='b', alpha=0.4)
-
-                xs = [f1_history, test_f1_history][choice]
-                plt.plot(xs, color='g', label='F1')
-                plt.plot([np.max(xs) for _ in xs], color='g', alpha=0.4)
-
-                xs = [acc_history, test_acc_history][choice]
-                plt.plot(xs, color='orange', label='Acc')
-                plt.plot([np.max(xs) for _ in xs], color='orange', alpha=0.4)
-
-                plt.xticks(xt)
-                plt.yticks(yt)
-                plt.xlim(0, epo)
-                plt.ylim(*yl)
-                plt.grid(True)
-                plt.title(f'{phase} plots')
-                plt.legend()
-                plt.show()
+            # if epo == 0 and phase == 'train':
+            #     min_y = min([f1_history[0], miou_history[0], acc_history[0]])
+            #     max_y = loss_history[0]
+            # else:
+            #     if phase == 'train':
+            #         min_y = min([min(f1_history), min(miou_history), min(acc_history)])
+            #         max_y = max(loss_history)
+            #     else:
+            #         min_y = min([min(test_f1_history), min(test_miou_history), min(test_acc_history)])
+            #         max_y = max(test_loss_history)
+            #
+            # yl = [min_y - 0.1, max_y + 0.1]
+            # yt = np.arange(yl[0], yl[1], 0.1)
+            # st = 5 * (1 + int(epo > 70) + int(epo > 150))
+            # xt = [st * i for i in range((epo % st != 0) + 1 + epo // st)]
+            #
+            # if epo % 10 == 0 or epo + 1 == epochs:
+            #     plt.figure(dpi=250)
+            #     choice = phase == 'test'
+            #     xs = [loss_history, test_loss_history][choice]
+            #     plt.plot(xs, color='r', label='loss')
+            #     plt.plot([np.min(xs) for _ in xs], color='r', alpha=0.4)
+            #
+            #     xs = [miou_history, test_miou_history][choice]
+            #     plt.plot(xs, color='b', label='IoU')
+            #     plt.plot([np.max(xs) for _ in xs], color='b', alpha=0.4)
+            #
+            #     xs = [f1_history, test_f1_history][choice]
+            #     plt.plot(xs, color='g', label='F1')
+            #     plt.plot([np.max(xs) for _ in xs], color='g', alpha=0.4)
+            #
+            #     xs = [acc_history, test_acc_history][choice]
+            #     plt.plot(xs, color='orange', label='Acc')
+            #     plt.plot([np.max(xs) for _ in xs], color='orange', alpha=0.4)
+            #
+            #     plt.xticks(xt)
+            #     plt.yticks(yt)
+            #     plt.xlim(0, epo)
+            #     plt.ylim(*yl)
+            #     plt.grid(True)
+            #     plt.title(f'{phase} plots')
+            #     plt.legend()
+            #     plt.show()
 
             if phase == 'train' and save:
                 torch.save({
@@ -249,7 +252,6 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
                 best_miou = epoch_miou
                 best_model_wts = copy.deepcopy(model.state_dict())
                 best_epoch = epo
-            print()
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
@@ -264,13 +266,13 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
 test_iou = 0
 # device = 'cpu'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-batch = 2
+batch = 16
 print(device, batch)
 
-data_dir = r'E:/files'
+data_dir = r'C:/files'
 # other = undefined / land / no data / water
 classes = ['other', '1-3', '4-5', '6-7', '8-10', 'ice shelf']
-path_to_save = r'E:/files/pts'
+path_to_save = r'C:/files/pts'
 os.makedirs(path_to_save, exist_ok=True)
 model_name = 'NewLbl'
 
@@ -303,13 +305,20 @@ class CrossValDataSet(Dataset):
         file_name = self.train_list[index] if self.part == 'train' else self.val_list[index]
 
         img = np.load(f'{self.datapath}/data/{file_name}')
+        img = np.nan_to_num(img)
+        # print('was', np.min(img), np.max(img))
         label = np.load(f'{self.datapath}/label/{file_name}')
+        mean, std = np.zeros(img.shape[0]), np.zeros(img.shape[0])
+        for channel in range(img.shape[0]):
+            mean[channel] = np.mean(img[channel, :, :])
+            std[channel] = np.std(img[channel, :, :])
+        # print('stats', mean, std)
 
-        # min_v, max_v = np.min(img), np.max(img)
-        min_v, max_v = -84.64701, 4.379311  # TODO: сравнить
-        img = ((img + min_v) / (abs(max_v) - abs(min_v) + 1) * 255).astype(np.uint8)
-
-        img = img.transpose(1, 2, 0)
+        norm = torchvision.transforms.Normalize(mean, std, inplace=True)
+        norm.forward(torch.from_numpy(img))
+        # n, x = abs(img.min()), abs(img.max())
+        # img = (img - n)/(x - n)
+        img = img.transpose((1, 2, 0))
         if self.transforms:
             augmented = self.transforms_test(image=img, mask=label[:, :])
         else:
@@ -318,6 +327,7 @@ class CrossValDataSet(Dataset):
         label = augmented['mask']
 
         img = img.transpose(2, 0, 1)
+        # print('got', np.min(img), np.max(img))
         return img, label
 
 
@@ -349,9 +359,9 @@ transforms_val = [albumentations.Resize(1280, 1280, interpolation=3)]
 dataset = {'train': CrossValDataSet(data_dir, transforms, 5, 1, 'train', True),
            'test': CrossValDataSet(data_dir, transforms_test, 5, 1, 'val', False)}
 dataloader = {'train': DataLoader(dataset['train'], batch_size=batch, shuffle=True, num_workers=0,
-                                  collate_fn=coll_fn, drop_last=True),  # , drop_last=True
+                                  collate_fn=coll_fn),  # , drop_last=True
               'test': DataLoader(dataset['test'], batch_size=batch, shuffle=False, num_workers=0,
-                                 collate_fn=coll_fn, drop_last=True)}  # , drop_last=True
+                                 collate_fn=coll_fn)}  # , drop_last=True
 
 dataset_sizes = {x: len(dataset[x]) for x in ['train', 'test']}
 
@@ -368,14 +378,14 @@ criterion = nn.CrossEntropyLoss()
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([[1, 0.75, 1.25]]))
 # criterion = torchvision.ops.sigmoid_focal_loss
 
-# optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
-optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01)
+optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
+# optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
 model_ft, iou = train_model(model_ft, device, dataloader, criterion, optimizer_ft, path_to_save, model_name,
-                            dataset_sizes, 3, False)
+                            dataset_sizes, 50, False)
 
-torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_test.pth')
+torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_v1.pth')
 
 # torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_v0.1.pth')
 # torch.save(model_ft.state_dict(), f'{path_to_save}/{model_name}_v3.pth')
