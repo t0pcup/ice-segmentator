@@ -9,9 +9,37 @@ import torchvision
 from torch.utils.data import Dataset, DataLoader
 import albumentations
 import segmentation_models_pytorch as smp
-from main import coll_fn, normalize
 
-transforms_val = [albumentations.Resize(1280, 1280)]
+# from main import coll_fn, normalize
+
+transforms_val = [
+    albumentations.Resize(1000, 1000, p=0.5, interpolation=3),
+    albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
+    albumentations.RandomRotate90(p=0.5),
+    albumentations.HorizontalFlip(p=0.5),
+    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0)
+]
+
+
+def normalize(im_: np.ndarray) -> np.ndarray:
+    # print(np.unique(im)) TODO nan in raw images
+    im_ = np.nan_to_num(im_)
+    mean, std = np.zeros(im_.shape[0]), np.zeros(im_.shape[0])
+    for channel in range(im_.shape[0]):
+        mean[channel] = np.mean(im_[channel, :, :])
+        std[channel] = np.std(im_[channel, :, :])
+
+    norm = torchvision.transforms.Normalize(mean, std)
+    return np.asarray(norm.forward(torch.from_numpy(im_)))
+
+
+def coll_fn(batch_):
+    ims_, labels_ = [], []
+    for _, sample in enumerate(batch_):
+        im, lbl = sample
+        ims_.append(torch.from_numpy(im.copy()))
+        labels_.append(torch.from_numpy(lbl.copy()))
+    return torch.stack(ims_, 0).type(torch.FloatTensor), torch.stack(labels_, 0).type(torch.LongTensor)
 
 
 class InferDataset(Dataset):
@@ -39,27 +67,25 @@ class InferDataset(Dataset):
         return img, label
 
 
-def unnormalize(image):
-    np_img = normalize(image.numpy())
+def unnormalize(np_img: np.ndarray):
     np_img = np.transpose(np_img, (1, 2, 0))
     np_img = (np_img * 255).astype(np.uint8)
     return np_img.transpose(2, 0, 1)
 
 
 data_path = r'E:/files'
-palette = np.array([i for i in range(14)])
-print(palette)
-model_path = r'E:/files/pts/NewLbl_v0.1.pth'
+palette = np.array([i for i in range(8)])
+model_path = r'E:/files/pts/versions/iou_zapal_na_1_f1_grthan_acc.pth'
 BATCH_SIZE = 1
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = smp.DeepLabV3(
     encoder_name="timm-mobilenetv3_small_minimal_100",  # efficientnet-b0
     encoder_weights=None,
     in_channels=4,
-    classes=14,
+    classes=8,
 )
 
-for file_name in os.listdir(data_path + '/label')[:30]:
+for file_name in os.listdir(data_path + '/label')[:40]:
     print(file_name)
 
     model.to(device)
@@ -76,17 +102,16 @@ for file_name in os.listdir(data_path + '/label')[:30]:
     model.eval()
     ce = nn.CrossEntropyLoss()
     outputs = model(inputs)
-    y_pred = torch.argmax(outputs, dim=1)
+    y_pred = torch.argmax(outputs, dim=1).cpu()
 
     name = file_name.split('.')[0]
     im = Image.fromarray(palette[y_pred[0, :, :]])
-    print(np.unique(y_pred[0, :, :], return_counts=True))
     # im.show()
     im.save(f"E:/files/view/raw_pred/{name}.gif")
 
-    # im = Image.fromarray(palette[labels[0, :, :]] * 255)
-    # # im.show()
-    # im.save(f"E:/dafuck/view/visualize/{name}l.gif")
+    labels = np.asarray(labels.cpu())
+    im = Image.fromarray(palette[labels[0, :, :]])
+    im.save(f"E:/files/view/raw_map/{name}.gif")
+
     # im = Image.fromarray(unnormalize(inputs[0, :, :, :]) * 255)
-    # # im.show()
-    # im.save(f"E:/dafuck/view/visualize/{name}i.gif")
+    # im.save(f"E:/files/view/raw_img/{name}i.gif")

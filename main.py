@@ -17,7 +17,7 @@ import warnings
 
 warnings.filterwarnings('ignore')
 torch.cuda.empty_cache()
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:256"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 print(os.environ["PYTORCH_CUDA_ALLOC_CONF"])
 
 
@@ -187,14 +187,13 @@ def train_model(model, device, dataset_loader, criterion_, optimizer,
     return model, best_miou
 
 
-test_iou = 0
 device_ = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-batch = 4
+batch = 2
 print(device_, batch)
 
 data_dir = r'E:/files'
-# other = undefined / land / no data / water
-classes = ['other', '1-3', '4-5', '6-7', '8-10', 'ice shelf']
+# other = undefined / land / no data
+classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']
 path_to_save = r'E:/files/pts'
 os.makedirs(path_to_save, exist_ok=True)
 model_name = 'NewLbl'
@@ -238,24 +237,19 @@ class CrossValDataSet(Dataset):
         label = augmented['mask']
 
         img = img.transpose(2, 0, 1)
-        # img, label = np.nan_to_num(img), np.nan_to_num(label)
-        label = np.nan_to_num(label)
-        n, x = np.min(img), np.max(img)
-        # if not (math.isnan(n) or math.isnan(x)):
-        if n != 0 or x != 1:
-            # print('was', n, x)
-            img = (img - n) / (x - n)
-            # n, x = np.min(img), np.max(img)
-            # print('got', n, x)
+        # label = np.nan_to_num(label)
 
-        # print('got', np.min(img), np.max(img))
+        n, x = np.min(img), np.max(img)
+        if n != 0 or x != 1:
+            img = (img - n) / (x - n)
+
         assert not np.any(np.isnan(img))
         assert not np.any(np.isnan(label))
         return img, label
 
 
 def normalize(im: np.ndarray) -> np.ndarray:
-    # print(np.unique(im)) TODO nan in raw images
+    # TODO nan in raw images
     im = np.nan_to_num(im)
     mean, std = np.zeros(im.shape[0]), np.zeros(im.shape[0])
     for channel in range(im.shape[0]):
@@ -276,23 +270,23 @@ def coll_fn(batch_):
 
 
 transforms = [
-    albumentations.Resize(1000, 1000, p=0.5, interpolation=3),
+    # albumentations.Resize(1100, 1100, p=0.5, interpolation=3),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
-    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0)
+    albumentations.RandomCrop(904, 904, always_apply=False, p=1.0)
 ]
 transforms_test = [
-    albumentations.Resize(1000, 1000, p=0.5, interpolation=3),
-    # albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
+    # albumentations.Resize(1100, 1100, p=0.5, interpolation=3),
+    albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
-    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0)
+    albumentations.RandomCrop(904, 904, always_apply=False, p=1.0)
 ]
 
-transforms_val = [albumentations.Resize(640, 640, interpolation=3)]  # 640 | 320
+transforms_val = [albumentations.Resize(904, 904, interpolation=3)]  # 640 | 320
 
-dataset = {'train': CrossValDataSet(data_dir, transforms, 4, 1, 'train', True),
-           'test': CrossValDataSet(data_dir, transforms_test, 4, 1, 'val', False)}
+dataset = {'train': CrossValDataSet(data_dir, transforms, 5, 1, 'train', True),
+           'test': CrossValDataSet(data_dir, transforms_test, 5, 1, 'val', False)}
 dataloader = {'train': DataLoader(dataset['train'], batch_size=batch, shuffle=True, num_workers=0,
                                   collate_fn=coll_fn, drop_last=True),  # , drop_last=True
               'test': DataLoader(dataset['test'], batch_size=batch, shuffle=False, num_workers=0,
@@ -304,13 +298,15 @@ model_ft = smp.DeepLabV3(
     encoder_name="timm-mobilenetv3_small_minimal_100",  # efficientnet-b0
     encoder_weights=None,
     in_channels=4,
-    classes=6,
+    classes=8,
 )
 
 model_ft = model_ft.to(device_)  # flag1
 # criterion = tversky_loss
-criterion = nn.CrossEntropyLoss()  # TODO без ignore_index iou становится nan
-# criterion = nn.CrossEntropyLoss(ignore_index=0)
+# criterion = nn.CrossEntropyLoss()  # TODO => iou nan -- тут хз, мб причина была та же
+"""nn.CrossEntropyLoss(ignore_index=0) => loss nan -- взрывалась ф-ция потерь
+из-за тензоров, где все эл-ты принадлежали ignore_index"""
+criterion = nn.CrossEntropyLoss(ignore_index=0)
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([[1, 0.75, 1.25]]))
 # criterion = torchvision.ops.sigmoid_focal_loss
 
@@ -319,10 +315,13 @@ optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
 model_ft, iou = train_model(model_ft, device_, dataloader, criterion, optimizer_ft, path_to_save, model_name,
-                            dataset_sizes, 10, True)
+                            dataset_sizes, 100, True)
 
-torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_fewer_classes_try.pth')
+v = '_fewer_classes_try_between_0_1_904'
+torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}{v}.pth')
 
 # torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_v0.1.pth')
 # torch.save(model_ft.state_dict(), f'{path_to_save}/{model_name}_v3.pth')
 # banned: 2021-06-14_3_1
+
+# TODO F1 лезет выше Acc :^) IoU = 1 %)

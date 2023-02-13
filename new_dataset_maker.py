@@ -176,40 +176,41 @@ white_list_images = ['E:/files/view/image/2021-06-14_0_2.tiff', 'E:/files/view/i
                      'E:/files/view/image/2021-10-18_1_4.tiff']
 
 translate_classes_simple = {
-    '55': 0,  # ice free
-    '01': 0,  # open water
-    '02': 0,  # bergy water
+    '55': 1,  # ice free
+    '01': 1,  # open water
+    '02': 1,  # bergy water
 
-    '10': 1,  # 1/10
-    '12': 1,  # 1-2/10
-    '13': 1,  # 1-3/10
-    '20': 1,  # 2/10
-    '23': 1,  # 2-3/10
-    '24': 1,  # 2-4/10
-    '30': 1,  # 3/10
-    '34': 1,  # 3-4/10
-    '35': 1,  # 3-5/10
+    '10': 2,  # 1/10
+    '12': 2,  # 1-2/10
+    '13': 2,  # 1-3/10
+    '20': 2,  # 2/10
+    '23': 2,  # 2-3/10
+    '24': 2,  # 2-4/10
 
-    '40': 2,  # 4/10
-    '45': 2,  # 4-5/10
-    '46': 2,  # 4-6/10
-    '50': 2,  # 5/10
-    '56': 2,  # 5-6/10
-    '57': 2,  # 5-7/10
+    '30': 3,  # 3/10
+    '34': 3,  # 3-4/10
+    '35': 3,  # 3-5/10
+    '40': 3,  # 4/10
+    '45': 3,  # 4-5/10
+    '46': 3,  # 4-6/10
 
-    '60': 3,  # 6/10
-    '67': 3,  # 6-7/10
-    '68': 3,  # 6-8/10
-    '70': 3,  # 7/10
-    '78': 3,  # 7-8/10
-    '79': 3,  # 7-9/10
+    '50': 4,  # 5/10
+    '56': 4,  # 5-6/10
+    '57': 4,  # 5-7/10
+    '60': 4,  # 6/10
+    '67': 4,  # 6-7/10
+    '68': 4,  # 6-8/10
 
-    '80': 4,  # 8/10
-    '89': 4,  # 8-9/10
-    '81': 4,  # 8-10/10
-    '90': 4,  # 9/10
-    '91': 4,  # 9-10/10
-    '92': 4,  # 10/10
+    '70': 5,  # 7/10
+    '78': 5,  # 7-8/10
+    '79': 5,  # 7-9/10
+    '80': 5,  # 8/10
+    '89': 5,  # 8-9/10
+    '81': 5,  # 8-10/10
+
+    '90': 6,  # 9/10
+    '91': 6,  # 9-10/10
+    '92': 6,  # 10/10
 }
 
 
@@ -217,11 +218,11 @@ def def_num(it: dict) -> int:
     if it['POLY_TYPE'] == 'L':  # land
         return 0
     if it['POLY_TYPE'] == 'W':  # water
-        return 0
+        return 1
     if it['POLY_TYPE'] == 'N':  # no data
         return 0
     if it['POLY_TYPE'] == 'S':  # ice shelf / ice of land origin
-        return 5
+        return 7
 
     return translate_classes_simple[it['CT']]  # ice – of any concentration
 
@@ -263,7 +264,9 @@ for f in white_list_shapes:
                                         fill=0,  # undefined
                                         merge_alg=MergeAlg.replace,
                                         dtype=np.int16)
-        # Plot raster
+
+        if rasterized.all() == 0:
+            continue
         if len(geom_value) > 5:
             fig, ax = plt.subplots(1, figsize=(10, 10))
             show(rasterized, ax=ax)
