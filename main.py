@@ -84,7 +84,8 @@ def train_model(model, loader, criterion_, optimizer,
                 st = get_stats(output, target, mode='multiclass', num_classes=8)
 
                 # choose reduction from: micro, macro, weighted, micro-imagewise, macro-imagewise
-                red = 'weighted'
+                red = 'macro'
+                # red = 'weighted'
                 ws = [0, *([1] * 7)] if red == 'weighted' else None
                 running_miou += iou_score(*st, reduction=red, class_weights=ws) * inputs.size(0)
                 running_pix_b_acc += balanced_accuracy(*st, reduction=red, class_weights=ws) * inputs.size(0)
@@ -199,7 +200,7 @@ criterion = nn.CrossEntropyLoss(ignore_index=0)
 optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.002)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
-v = 'weighted'
+v = 'macro'
 model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 100)
 torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_{v}.pth')
 # torch.save(model_ft.state_dict(), f'{path_to_save}/{model_name}_v3.pth')
