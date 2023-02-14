@@ -1,13 +1,10 @@
-import numpy as np
 import os
 import time
 import copy
-import torch
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-import albumentations
-# from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score  # , roc_auc_score TODO
+# from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, roc_auc_score TODO
 from tqdm import tqdm
 from segmentation_models_pytorch.metrics import get_stats, iou_score, accuracy, balanced_accuracy, f1_score
 import torch.nn as nn
@@ -20,13 +17,15 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 print(os.environ["PYTORCH_CUDA_ALLOC_CONF"])
 
 
-def train_model(model, dataset_loader, criterion_, optimizer,
+def train_model(model, loader, criterion_, optimizer,
                 model_path, mod_name, dataset_size, epochs=25, save=False):
     since = time.time()
     best_model_wts = copy.deepcopy(model.state_dict())
     best_miou = 0.0
     best_epoch = 0
-    # ce = nn.CrossEntropyLoss(ignore_index=0)
+    writer_dir = 'E:/files/history'
+    os.makedirs(f"{writer_dir}/{v}", exist_ok=True)
+    writer = SummaryWriter(f"{writer_dir}/{v}")
 
     for epo in range(epochs):
         torch.cuda.empty_cache()
@@ -43,10 +42,8 @@ def train_model(model, dataset_loader, criterion_, optimizer,
             running_pix_acc = 0.0
             running_miou = 0.0
             # running_roc = 0.0
-            ls = np.array([])
-            ps = np.array([])
             # Iterate over data.
-            for i, (inputs, labels) in enumerate(tqdm(dataset_loader[phase], desc=f'Epoch {epo}/{epochs - 1} {phase}')):
+            for i, (inputs, labels) in enumerate(tqdm(loader[phase], desc=f'Epoch {epo}/{epochs - 1} {phase}')):
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 
@@ -81,13 +78,8 @@ def train_model(model, dataset_loader, criterion_, optimizer,
 
                 l_ = torch.flatten(labels).cpu().detach().numpy()
                 p = torch.flatten(y_pred).cpu().detach().numpy()
-                if len(ls) == 0:
-                    ls = l_
-                    ps = p
-                else:
-                    np.append(ls, l_)
-                    np.append(ps, p)
 
+                # TODO: get rid of l_ and p, go for labels and y_pred
                 output, target = torch.LongTensor(p.astype(int)), torch.LongTensor(l_.astype(int))
                 st = get_stats(output, target, mode='multiclass', num_classes=8)
 
@@ -107,17 +99,17 @@ def train_model(model, dataset_loader, criterion_, optimizer,
             epo_pix_acc = float(running_pix_acc) / dataset_size[phase]
             epo_miou = float(running_miou) / dataset_size[phase]
 
+            writer.add_scalar(phase + ' | loss', epo_loss, epo)
+            writer.add_scalar(phase + ' | f1', mean_epo_pix_f1, epo)
+            writer.add_scalar(phase + ' | accuracy', epo_pix_acc, epo)
+            writer.add_scalar(phase + ' | b_accuracy', epo_pix_b_acc, epo)
+            writer.add_scalar(phase + ' | mean_IoU', epo_miou, epo)
+
+            writer.add_image(phase + ' | sample predict', y_pred[0])
+
             p = 'test ' if phase == 'test' else 'train'
             print(f'{p} Loss: {epo_loss:.4f} F1: {mean_epo_pix_f1:.4f} Acc: {epo_pix_acc:.4f} ' +
-                  f'bAcc:{epo_pix_b_acc:.4f} IoU: {epo_miou:.4f}')
-
-            writer = SummaryWriter('E:/files/history')
-            writer.add_scalar(phase + ' | loss', np.random.random(), epo)
-            writer.add_scalar(phase + ' | f1', np.random.random(), epo)
-            writer.add_scalar(phase + ' | b_accuracy', np.random.random(), epo)
-            writer.add_scalar(phase + ' | accuracy', np.random.random(), epo)
-            writer.add_scalar(phase + ' | mean_IoU', np.random.random(), epo)
-            writer.close()
+                  f'bAcc: {epo_pix_b_acc:.4f} IoU: {epo_miou:.4f}')
 
             if phase == 'train' and save:
                 torch.save({
@@ -131,6 +123,7 @@ def train_model(model, dataset_loader, criterion_, optimizer,
                 best_epoch = epo
 
     time_elapsed = time.time() - since
+    writer.close()
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print('Best test iou: {:4f}'.format(best_miou))
     print(f'Best epoch: {best_epoch}')
@@ -151,24 +144,21 @@ class CrossValDataSet(Dataset):
 
         for i in range(len(self.train_list) // parts):
             self.val_list.append(self.train_list[len(self.train_list) // parts * val_part + i])
-            print(type(len(self.train_list) // parts * val_part + i))
             self.train_list[len(self.train_list) // parts * val_part + i] = 0
         while 0 in self.train_list:
             self.train_list.remove(0)
         self.rgb_shift = rgb_shift
-        self.transforms = None
-        if transforms_:
-            self.transforms = albumentations.Compose(transforms_)
-            self.transforms_test = albumentations.Compose(transforms_test)
-
-        self.transforms_val = albumentations.Compose(transforms_val)
+        self.transforms = transforms_
+        # if transforms_:
+        #     self.transforms = albumentations.Compose(transforms_)
+        #     self.transforms_test = albumentations.Compose(transforms_test)
 
     def __len__(self):
         return len([self.train_list, self.val_list][self.part == 'val'])
 
     def __getitem__(self, index):
         file_name = self.train_list[index] if self.part == 'train' else self.val_list[index]
-        image, label = item_getter(self.path, file_name, self.transforms_test)
+        image, label = item_getter(self.path, file_name, transforms=self.transforms)
         return image, label
 
 
@@ -183,7 +173,6 @@ transforms_test = [
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
 ]
-transforms_val = [albumentations.CenterCrop(128, 128, always_apply=False, p=1.0)]
 
 data_dir = r'E:/files'
 classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']  # other = undefined / land / no data
@@ -207,11 +196,10 @@ criterion = nn.CrossEntropyLoss(ignore_index=0)
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([[1, 0.75, 1.25]]))
 # criterion = torchvision.ops.sigmoid_focal_loss
 
-optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
+optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.002)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
-model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 100, True)
-
-v = '_v3.1_WEIGHTED'
-torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}{v}.pth')
+v = 'weighted'
+model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 100)
+torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_{v}.pth')
 # torch.save(model_ft.state_dict(), f'{path_to_save}/{model_name}_v3.pth')
