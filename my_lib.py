@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torchvision.ops
 import segmentation_models_pytorch as smp
+from torch.nn import functional
 
 
 def normalize(im: np.ndarray) -> np.ndarray:
@@ -46,11 +47,44 @@ def item_getter(path: str, file_name: str, transforms) -> (np.ndarray, np.ndarra
     return image, label
 
 
+def tversky_loss(true, logits, alpha=0.5, beta=0.5, eps=1e-7):
+    """Computes the Tversky loss [1].
+    Args:
+        true: a tensor of shape [B, H, W] or [B, 1, H, W].
+        logits: a tensor of shape [B, C, H, W]. Corresponds to
+            the raw output or logits of the model.
+        alpha: controls the penalty for false positives.
+        beta: controls the penalty for false negatives.
+        eps: added to the denominator for numerical stability.
+    Returns:
+        tversky_loss: the Tversky loss.
+    Notes:
+        alpha = beta = 0.5 => dice coefficient
+        alpha = beta = 1 => tanimoto coefficient
+        alpha + beta = 1 => F beta coefficient
+    References:
+        [1]: https://arxiv.org/abs/1706.05721
+    """
+    num_classes = logits.shape[1]
+    true_1_hot = torch.eye(num_classes, device=true.device)[true.squeeze(1)]
+    true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
+    probas = functional.softmax(logits, dim=1)
+
+    true_1_hot = true_1_hot.type(logits.type())
+    dims = (0,) + tuple(range(2, true_1_hot.ndimension()))
+    intersection = torch.sum(probas * true_1_hot, dims)
+    fps = torch.sum(probas * (1 - true_1_hot), dims)
+    fns = torch.sum((1 - probas) * true_1_hot, dims)
+    num = intersection
+    denominate = intersection + (alpha * fps) + (beta * fns)
+    return 1 - (num / (denominate + eps)).mean()
+
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 model_ft = smp.DeepLabV3(
     encoder_name="timm-mobilenetv3_small_minimal_100",  # efficientnet-b0
     encoder_weights=None,
     in_channels=4,
     classes=8,
-)
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+).to(device)

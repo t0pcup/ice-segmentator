@@ -3,8 +3,8 @@ import os
 import time
 import copy
 import torch
+from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
-from torch.nn import functional
 from torch.utils.data import Dataset, DataLoader
 import albumentations
 # from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score  # , roc_auc_score TODO
@@ -12,45 +12,12 @@ from tqdm import tqdm
 from segmentation_models_pytorch.metrics import get_stats, iou_score, accuracy, balanced_accuracy, f1_score
 import torch.nn as nn
 import warnings
-from my_lib import coll_fn, item_getter, model_ft, device
+from my_lib import *
 
 warnings.filterwarnings('ignore')
 torch.cuda.empty_cache()
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 print(os.environ["PYTORCH_CUDA_ALLOC_CONF"])
-
-
-def tversky_loss(true, logits, alpha=0.5, beta=0.5, eps=1e-7):
-    """Computes the Tversky loss [1].
-    Args:
-        true: a tensor of shape [B, H, W] or [B, 1, H, W].
-        logits: a tensor of shape [B, C, H, W]. Corresponds to
-            the raw output or logits of the model.
-        alpha: controls the penalty for false positives.
-        beta: controls the penalty for false negatives.
-        eps: added to the denominator for numerical stability.
-    Returns:
-        tversky_loss: the Tversky loss.
-    Notes:
-        alpha = beta = 0.5 => dice coefficient
-        alpha = beta = 1 => tanimoto coefficient
-        alpha + beta = 1 => F beta coefficient
-    References:
-        [1]: https://arxiv.org/abs/1706.05721
-    """
-    num_classes = logits.shape[1]
-    true_1_hot = torch.eye(num_classes, device=true.device)[true.squeeze(1)]
-    true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
-    probas = functional.softmax(logits, dim=1)
-
-    true_1_hot = true_1_hot.type(logits.type())
-    dims = (0,) + tuple(range(2, true_1_hot.ndimension()))
-    intersection = torch.sum(probas * true_1_hot, dims)
-    fps = torch.sum(probas * (1 - true_1_hot), dims)
-    fns = torch.sum((1 - probas) * true_1_hot, dims)
-    num = intersection
-    denominate = intersection + (alpha * fps) + (beta * fns)
-    return 1 - (num / (denominate + eps)).mean()
 
 
 def train_model(model, dataset_loader, criterion_, optimizer,
@@ -144,6 +111,14 @@ def train_model(model, dataset_loader, criterion_, optimizer,
             print(f'{p} Loss: {epo_loss:.4f} F1: {mean_epo_pix_f1:.4f} Acc: {epo_pix_acc:.4f} ' +
                   f'bAcc:{epo_pix_b_acc:.4f} IoU: {epo_miou:.4f}')
 
+            writer = SummaryWriter('E:/files/history')
+            writer.add_scalar(phase + ' | loss', np.random.random(), epo)
+            writer.add_scalar(phase + ' | f1', np.random.random(), epo)
+            writer.add_scalar(phase + ' | b_accuracy', np.random.random(), epo)
+            writer.add_scalar(phase + ' | accuracy', np.random.random(), epo)
+            writer.add_scalar(phase + ' | mean_IoU', np.random.random(), epo)
+            writer.close()
+
             if phase == 'train' and save:
                 torch.save({
                     'model_state_dict': model.state_dict(),
@@ -165,17 +140,6 @@ def train_model(model, dataset_loader, criterion_, optimizer,
     return model, best_miou
 
 
-batch = 16
-print(device, batch)
-
-data_dir = r'E:/files'
-# other = undefined / land / no data
-classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']
-path_to_save = r'E:/files/pts'
-os.makedirs(path_to_save, exist_ok=True)
-model_name = 'NewLbl'
-
-
 class CrossValDataSet(Dataset):
     def __init__(self, path, transforms_, parts, val_part, part, rgb_shift):
         if val_part > parts - 1 or val_part < 0:
@@ -187,6 +151,7 @@ class CrossValDataSet(Dataset):
 
         for i in range(len(self.train_list) // parts):
             self.val_list.append(self.train_list[len(self.train_list) // parts * val_part + i])
+            print(type(len(self.train_list) // parts * val_part + i))
             self.train_list[len(self.train_list) // parts * val_part + i] = 0
         while 0 in self.train_list:
             self.train_list.remove(0)
@@ -197,8 +162,6 @@ class CrossValDataSet(Dataset):
             self.transforms_test = albumentations.Compose(transforms_test)
 
         self.transforms_val = albumentations.Compose(transforms_val)
-        # self.transforms_resize_image = albumentations.Compose(transforms_resize_img)
-        # self.transforms_resize_label = albumentations.Compose(transforms_resize_lbl)
 
     def __len__(self):
         return len([self.train_list, self.val_list][self.part == 'val'])
@@ -206,33 +169,7 @@ class CrossValDataSet(Dataset):
     def __getitem__(self, index):
         file_name = self.train_list[index] if self.part == 'train' else self.val_list[index]
         image, label = item_getter(self.path, file_name, self.transforms_test)
-        # image = normalize(np.load(f'{self.path}/data/{file_name}'))
-        # label = np.load(f'{self.path}/label/{file_name}')
-        #
-        # img = image.transpose((1, 2, 0))
-        # if self.transforms:
-        #     augmented = self.transforms_test(image=img, mask=label[:, :])
-        # else:
-        #     augmented = self.transforms_val(image=img, mask=label[:, :])
-        # # image, label = augmented['image'], augmented['mask']
-        # image = self.transforms_resize_image(image=augmented['image'], mask=augmented['mask'])['image']
-        # label = self.transforms_resize_label(image=augmented['image'], mask=augmented['mask'])['mask']
-        #
-        # image = image.transpose(2, 0, 1)
-        # # label = np.nan_to_num(label)
-        #
-        # assert not np.any(np.isnan(image))
-        # assert not np.any(np.isnan(label))
         return image, label
-
-
-# def coll_fn(batch_):
-#     ims_, labels_ = [], []
-#     for _, sample in enumerate(batch_):
-#         im, lbl = sample
-#         ims_.append(torch.from_numpy(im.copy()))
-#         labels_.append(torch.from_numpy(lbl.copy()))
-#     return torch.stack(ims_, 0).type(torch.FloatTensor), torch.stack(labels_, 0).type(torch.LongTensor)
 
 
 transforms = [
@@ -246,14 +183,15 @@ transforms_test = [
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
 ]
-transforms_resize_img = [
-    albumentations.Resize(128, 128, p=1.0, interpolation=3),
-]
-transforms_resize_lbl = [
-    albumentations.Resize(128, 128, p=1.0, interpolation=0),
-]
+transforms_val = [albumentations.CenterCrop(128, 128, always_apply=False, p=1.0)]
 
-transforms_val = [albumentations.CenterCrop(640, 640, always_apply=False, p=1.0)]
+data_dir = r'E:/files'
+classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']  # other = undefined / land / no data
+path_to_save = r'E:/files/pts'
+os.makedirs(path_to_save, exist_ok=True)
+model_name = 'NewLbl'
+batch = 16
+print(device, batch)
 
 dataset = {'train': CrossValDataSet(data_dir, transforms, 5, 1, 'train', True),
            'test': CrossValDataSet(data_dir, transforms_test, 5, 1, 'val', False)}
@@ -262,20 +200,17 @@ dataloader = {'train': DataLoader(dataset['train'], batch_size=batch, shuffle=Tr
               'test': DataLoader(dataset['test'], batch_size=batch, shuffle=False, num_workers=0,
                                  collate_fn=coll_fn)}  # , drop_last=True
 
-dataset_sizes = {x: len(dataset[x]) for x in ['train', 'test']}
+sizes = {x: len(dataset[x]) for x in ['train', 'test']}
 
-model_ft = model_ft.to(device)  # flag1
 # criterion = tversky_loss
 criterion = nn.CrossEntropyLoss(ignore_index=0)
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([[1, 0.75, 1.25]]))
 # criterion = torchvision.ops.sigmoid_focal_loss
 
 optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
-# optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
-model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name,
-                            dataset_sizes, 100, True)
+model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 100, True)
 
 v = '_v3.1_WEIGHTED'
 torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}{v}.pth')
