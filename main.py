@@ -13,7 +13,7 @@ from my_lib import *
 
 warnings.filterwarnings('ignore')
 torch.cuda.empty_cache()
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 print(os.environ["PYTORCH_CUDA_ALLOC_CONF"])
 
 
@@ -78,14 +78,14 @@ def train_model(model, loader, criterion_, optimizer,
 
                 l_ = torch.flatten(labels).cpu().detach().numpy()
                 p = torch.flatten(y_pred).cpu().detach().numpy()
+                # writer.add_image(phase + ' | sample predict', y_pred)
 
                 # TODO: get rid of l_ and p, go for labels and y_pred
                 output, target = torch.LongTensor(p.astype(int)), torch.LongTensor(l_.astype(int))
                 st = get_stats(output, target, mode='multiclass', num_classes=8)
 
                 # choose reduction from: micro, macro, weighted, micro-imagewise, macro-imagewise
-                red = 'macro'
-                # red = 'weighted'
+                red = 'weighted'
                 ws = [0, *([1] * 7)] if red == 'weighted' else None
                 running_miou += iou_score(*st, reduction=red, class_weights=ws) * inputs.size(0)
                 running_pix_b_acc += balanced_accuracy(*st, reduction=red, class_weights=ws) * inputs.size(0)
@@ -95,21 +95,19 @@ def train_model(model, loader, criterion_, optimizer,
                 # print(f"micro={mi}\tmacro={ma}\tweighted={wg}\tmicro-imagewise={mii}\tmacro-imagewise={mai}\t")
 
             epo_loss = float(running_loss) / dataset_size[phase]
-            mean_epo_pix_f1 = float(running_pix_f1) / dataset_size[phase]
+            epo_pix_f1 = float(running_pix_f1) / dataset_size[phase]
             epo_pix_b_acc = float(running_pix_b_acc) / dataset_size[phase]
             epo_pix_acc = float(running_pix_acc) / dataset_size[phase]
             epo_miou = float(running_miou) / dataset_size[phase]
 
             writer.add_scalar(phase + ' | loss', epo_loss, epo)
-            writer.add_scalar(phase + ' | f1', mean_epo_pix_f1, epo)
+            writer.add_scalar(phase + ' | f1', epo_pix_f1, epo)
             writer.add_scalar(phase + ' | accuracy', epo_pix_acc, epo)
             writer.add_scalar(phase + ' | b_accuracy', epo_pix_b_acc, epo)
             writer.add_scalar(phase + ' | mean_IoU', epo_miou, epo)
 
-            writer.add_image(phase + ' | sample predict', y_pred[0])
-
-            p = 'test ' if phase == 'test' else 'train'
-            print(f'{p} Loss: {epo_loss:.4f} F1: {mean_epo_pix_f1:.4f} Acc: {epo_pix_acc:.4f} ' +
+            ph = 'test ' if phase == 'test' else 'train'
+            print(f'{ph} Loss: {epo_loss:.4f} F1: {epo_pix_f1:.4f} Acc: {epo_pix_acc:.4f} ' +
                   f'bAcc: {epo_pix_b_acc:.4f} IoU: {epo_miou:.4f}')
 
             if phase == 'train' and save:
@@ -149,7 +147,7 @@ class CrossValDataSet(Dataset):
         while 0 in self.train_list:
             self.train_list.remove(0)
         self.rgb_shift = rgb_shift
-        self.transforms = transforms_
+        self.transforms = albumentations.Compose(transforms_)
         # if transforms_:
         #     self.transforms = albumentations.Compose(transforms_)
         #     self.transforms_test = albumentations.Compose(transforms_test)
@@ -197,10 +195,10 @@ criterion = nn.CrossEntropyLoss(ignore_index=0)
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([[1, 0.75, 1.25]]))
 # criterion = torchvision.ops.sigmoid_focal_loss
 
-optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.002)
+optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
-v = 'macro'
-model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 100)
+v = 'weighted_X1'
+model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 15)
 torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_{v}.pth')
 # torch.save(model_ft.state_dict(), f'{path_to_save}/{model_name}_v3.pth')

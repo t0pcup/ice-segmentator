@@ -1,13 +1,23 @@
 import warnings
-from shapely.ops import cascaded_union, unary_union
+from shapely.ops import unary_union
 from shapely.geometry import Polygon, box
 import os
 import glob
 from eodag.api.core import EODataAccessGateway
 from eodag import setup_logging
 import geopandas as gpd
-import tqdm
+from tqdm import tqdm
+from datetime import date, timedelta
 from eoreader.reader import Reader
+from sentinelhub.geo_utils import wgs84_to_utm, to_wgs84, get_utm_crs
+from pathlib import Path
+import logging
+from eoreader.reader import Reader
+import eoreader.bands as bands
+from eoreader.bands import VV, HH, VV_DSPK, HH_DSPK, HILLSHADE, SLOPE, to_str, VH, VH_DSPK
+from sentinelhub.geo_utils import wgs84_to_utm, to_wgs84, get_utm_crs
+from osgeo import gdal
+from osgeo import osr
 from eoreader.bands import *
 import rasterio
 import matplotlib.pyplot as plt
@@ -22,12 +32,17 @@ warnings.filterwarnings("ignore")
 reg_path = 'E:/files/regions/2021'
 view_path = 'E:/files/view'
 dataset_path = 'E:/files/dataset'
+save_path = 'E:/dag_img'
 
 setup_logging(1)
 os.environ["EODAG__PEPS__AUTH__CREDENTIALS__USERNAME"] = "katarina.spasenovic@omni-energy.it"
 os.environ["EODAG__PEPS__AUTH__CREDENTIALS__PASSWORD"] = "M@rkon!1997"
+
+os.environ["EODAG__ONDA__AUTH__CREDENTIALS__USERNAME"] = "t0pcup@yandex.ru"
+os.environ["EODAG__ONDA__AUTH__CREDENTIALS__PASSWORD"] = "jL7-iq4-GBM-RPe"
 dag = EODataAccessGateway()
-workspace = os.path.join(view_path, "/quicklooks")
+workspace = 'E:/dataset'
+
 if not os.path.isdir(workspace):
     os.mkdir(workspace)
 
@@ -38,10 +53,10 @@ peps:
         extract: true
 """.format(workspace)
 
-with open(os.path.join(workspace, 'eodag_conf.yml'), "w") as f_yml:
+with open(f'{workspace}/eodag_conf.yml', "w") as f_yml:
     f_yml.write(yaml_content.strip())
 
-dag = EODataAccessGateway(os.path.join(workspace, 'eodag_conf.yml'))
+dag = EODataAccessGateway(f'{workspace}/eodag_conf.yml')
 product_type = 'S1_SAR_GRD'
 dag.set_preferred_provider("peps")
 test_name = 'E:/dafuck/regions/2021/cis_SGRDREA_20210614T1800Z_pl_a.shp'
@@ -215,77 +230,236 @@ translate_classes_simple = {
 
 
 def def_num(it: dict) -> int:
-    if it['POLY_TYPE'] == 'L':  # land
-        return 0
-    if it['POLY_TYPE'] == 'W':  # water
-        return 1
-    if it['POLY_TYPE'] == 'N':  # no data
-        return 0
-    if it['POLY_TYPE'] == 'S':  # ice shelf / ice of land origin
-        return 7
-
-    return translate_classes_simple[it['CT']]  # ice – of any concentration
+    trans_dict = {'L': 0, 'W': 1, 'N': 0, 'S': 7}
+    try:
+        return trans_dict[it['POLY_TYPE']]
+    except:
+        return translate_classes_simple[it['CT']]
 
 
 white_dict = dict(zip(white_list_shapes, [list() for _ in white_list_shapes]))
 
-for f in white_list_shapes:
-    shapes_list = gpd.read_file(f).to_crs('epsg:4326')
-    file = fiona.open(f)
-    # print(len(file))
-    poly = unary_union(shapes_list['geometry'])
-
+"""NEW"""
+for f in glob.glob(f'E:/files/regions/2021/*.shp'):
+    dataset = gpd.read_file(f).to_crs('epsg:4326')
     dt = f.split('_')[2]
-    dt = [dt[:4], dt[4:6], dt[6:8]]
-    add_day = str(int(dt[2]) + 1)
+    dt = date.fromisoformat(f'{dt[:4]}-{dt[4:6]}-{dt[6:8]}')
+    nm = f.split('\\')[-1][4:].split('T')[0]
+    search_criteria = {
+        "productType": product_type,
+        "start": f'{dt}T10:00:00',
+        "end": f'{dt}T23:59:59',
+        "geom": None,
+        "items_per_page": 500,
+    }
 
-    for img_file in white_list_images:
-        if not '-'.join(dt) in img_file:
+    i = -1
+    for item in [unary_union(dataset['geometry'])]:  # dataset['geometry']:
+        print(0, end='')
+        i += 1
+        poly = Polygon(item)
+        search_criteria["geom"] = poly
+        # first_page, estimated_total_number = dag.search(**search_criteria)
+        # if estimated_total_number == 0:
+        #     continue
+        #
+        # # dag.download_all(first_page)
+        # for elt in first_page:
+        #     if '1SDH' in elt.properties["title"] or 'EW' in elt.properties["title"]:
+        #         continue
+        #     try:
+        #         product_path = elt.download(extract=False)
+        #     except:
+        #         pass
+
+        zip_paths = glob.glob(f'{workspace}/*.zip')
+        if len(zip_paths) == 0:
             continue
 
-        sat_img = rasterio.open(img_file, 'r')
-        bb, profile = sat_img.bounds, sat_img.profile
-        sat_poly = box(*bb, ccw=True)
-
-        geom_value = []
-        for i in range(len(file)):
-            geom_ = shapes_list.geometry[i].intersection(sat_poly)
-            if geom_.area == 0:
-                cnt += 1
+        for zip_id in tqdm(range(len(zip_paths))):
+            if not os.path.isfile(zip_paths[zip_id]):
                 continue
-            prop = file[i]
-            geom_value.append((geom_, def_num(prop['properties'])))
-        # print(geom_value)
 
-        rasterized = features.rasterize(geom_value,
-                                        out_shape=sat_img.shape,
-                                        transform=sat_img.transform,
-                                        all_touched=True,
-                                        fill=0,  # undefined
-                                        merge_alg=MergeAlg.replace,
-                                        dtype=np.int16)
+            full_path = os.path.join(dataset_path, zip_paths[zip_id])
+            reader = Reader()
+            try:
+                product = reader.open(full_path)
+            except:
+                continue
 
-        if rasterized.all() == 0:
-            continue
-        if len(geom_value) > 5:
-            fig, ax = plt.subplots(1, figsize=(10, 10))
-            show(rasterized, ax=ax)
-            plt.gca().invert_yaxis()
-            plt.show()
+            product_polygon = product.wgs84_extent().iloc[0].geometry
+            name = os.path.basename(full_path)
+            print(f'{name}')
 
-        # print(sat_img.shape)
-        # print(rasterized.shape)
-        # print(img_file.split('image/')[1].split('.')[0])
-        npy_name = img_file.split('image/')[1].split('.')[0]
-        np.save(f'E:/files/label/{npy_name}', rasterized)
+            # mask_date = name.split('_')[4]
+            # year = mask_date[:4]
+            # month = mask_date[4:6]
+            # day = mask_date[6:8]
+            #
+            # date_1 = date.fromisoformat(f'{year}-{month}-{day}')
+            # date_1 = date_1.strftime('%Y-%m-%d')
+            # df_date = df[df['date'] == date_1]
+            # mp = [df_date.iloc[i].geometry for i in range(len(df_date))]
 
-        # with rasterio.open(img_file.replace('image', 'map'), 'w', **profile) as src:
-        #     src.write(rasterized)
+            pi = product_polygon.intersection(poly)
+            print(f"Intersection: {pi.area}")
+            if pi.area < 0.02:
+                print(2)
+                continue
 
-        # if poly.intersects(sat_poly):
-        #     cnt += 1
-        #     print(f)
-        #     print(img_file)
+            product_polygon = product.wgs84_extent().iloc[0].geometry
+            crs = get_utm_crs(product_polygon.bounds[0], product_polygon.bounds[1])
+            print(product.crs(), crs)
+
+            min_utm_x, min_utm_y = wgs84_to_utm(poly.bounds[0], poly.bounds[1], crs)
+            max_utm_x, max_utm_y = wgs84_to_utm(poly.bounds[2], poly.bounds[3], crs)
+
+            bands = [VV, HH, VV_DSPK, HH_DSPK, VH, VH_DSPK]
+            ok_bands = [band for band in bands if product.has_band(band)]
+
+            stack = product.stack(ok_bands)
+
+            print('Stack down')
+            np_stack = stack.to_numpy()
+
+            resolution = product.resolution
+            chunk_size = int((256 / 20) * 100)
+
+            min_utm_x = max(min_utm_x, stack.x[0])
+            min_utm_y = max(min_utm_y, stack.y[-1])
+            max_utm_x = min(max_utm_x, stack.x[-1])
+            max_utm_y = min(max_utm_y, stack.y[0])
+
+            if min_utm_x > max_utm_x or min_utm_y > max_utm_y:
+                print(min_utm_x, max_utm_x, min_utm_y, max_utm_y)
+                print(3)
+                continue
+
+            min_x = int((np.abs(stack.x - min_utm_x)).argmin())
+            max_y = int((np.abs(stack.y - min_utm_y)).argmin())
+            max_x = int((np.abs(stack.x - max_utm_x)).argmin())
+            min_y = int((np.abs(stack.y - max_utm_y)).argmin())
+
+            step_x = (max_x - min_x) // chunk_size
+            step_y = (max_y - min_y) // chunk_size
+
+            print(f'Step x: {step_x}; Step y: {step_y}')
+
+            try:
+
+                for sx in range(step_x + 1):
+                    for sy in range(step_y + 1):
+                        y1 = min_y + sy * chunk_size
+                        y2 = min_y + (sy + 1) * chunk_size
+
+                        x1 = min_x + sx * chunk_size
+                        x2 = min_x + (sx + 1) * chunk_size
+                        if y1 < 0 or x1 < 0:
+                            continue
+                        if y2 >= len(stack.y) or x2 >= len(stack.x):
+                            continue
+                        patch = np_stack[:, y1:y2, x1:x2]
+
+                        if np.sum(np.isnan(patch)) > 20 * chunk_size * 4:
+                            continue
+
+                        x_min, y_max = to_wgs84(stack.x[x1], stack.y[y1], crs)
+                        x_max, y_min = to_wgs84(stack.x[x2], stack.y[y2], crs)
+
+                        patch_pol = Polygon([(x_min, y_min), (x_min, y_max), (x_max, y_max), (x_max, y_min)])
+                        inter = patch_pol.intersection(poly)
+
+                        if inter.area < 0.0005:
+                            continue
+
+                        nx = patch.shape[1]
+                        ny = patch.shape[1]
+
+                        x_res = (x_max - x_min) / float(nx)
+                        y_res = (y_max - y_min) / float(ny)
+                        geotransform = (x_min, x_res, 0, y_max, 0, -y_res)
+                        save_tiff = f'{save_path}/{dt}_{i}_{sx}_{sy}'
+
+                        dst_ds = gdal.GetDriverByName('GTiff').Create(f'{save_tiff}.tiff', ny, nx, 3, gdal.GDT_Byte)
+                        dst_ds.SetGeoTransform(geotransform)  # specify coords
+                        srs = osr.SpatialReference()  # establish encoding
+                        srs.ImportFromEPSG(4326)  # WGS84 lat/long
+                        dst_ds.SetProjection(srs.ExportToWkt())  # export coords to file
+                        dst_ds.GetRasterBand(1).WriteArray(patch[0])  # write r-band to the raster
+                        dst_ds.GetRasterBand(2).WriteArray(patch[1])  # write g-band to the raster
+                        dst_ds.GetRasterBand(3).WriteArray(patch[2])  # write b-band to the raster
+                        dst_ds.FlushCache()
+                        np.save(save_tiff, patch)
+                        dataframe = gpd.GeoDataFrame({'geometry': [patch_pol], 'date': dt})
+                        dataframe.to_file(f"{save_tiff}.geojson", driver='GeoJSON', show_bbox=False)
+            except:
+                pass
+        for zip_id in tqdm(range(len(zip_paths))):
+            if not os.path.isfile(zip_paths[zip_id]):
+                continue
+            else:
+                os.remove(zip_paths[zip_id])
+"""NEW"""
+
+"""BEGIN"""
+# for f in white_list_shapes:
+#     shapes_list = gpd.read_file(f).to_crs('epsg:4326')
+#     file = fiona.open(f)
+#     # print(len(file))
+#     poly = unary_union(shapes_list['geometry'])
+#
+#     dt = f.split('_')[2]
+#     dt = [dt[:4], dt[4:6], dt[6:8]]
+#     add_day = str(int(dt[2]) + 1)
+#
+#     for img_file in white_list_images:
+#         if not '-'.join(dt) in img_file:
+#             continue
+#
+#         sat_img = rasterio.open(img_file, 'r')
+#         bb, profile = sat_img.bounds, sat_img.profile
+#         sat_poly = box(*bb, ccw=True)
+#
+#         geom_value = []
+#         for i in range(len(file)):
+#             geom_ = shapes_list.geometry[i].intersection(sat_poly)
+#             if geom_.area == 0:
+#                 cnt += 1
+#                 continue
+#             prop = file[i]
+#             geom_value.append((geom_, def_num(prop['properties'])))
+#         # print(geom_value)
+#
+#         rasterized = features.rasterize(geom_value,
+#                                         out_shape=sat_img.shape,
+#                                         transform=sat_img.transform,
+#                                         all_touched=True,
+#                                         fill=0,  # undefined
+#                                         merge_alg=MergeAlg.replace,
+#                                         dtype=np.int16)
+#
+#         if rasterized.all() == 0:
+#             continue
+#         if len(geom_value) > 5:
+#             fig, ax = plt.subplots(1, figsize=(10, 10))
+#             show(rasterized, ax=ax)
+#             plt.gca().invert_yaxis()
+#             plt.show()
+#
+#         # print(sat_img.shape)
+#         # print(rasterized.shape)
+#         # print(img_file.split('image/')[1].split('.')[0])
+#         npy_name = img_file.split('image/')[1].split('.')[0]
+#         np.save(f'E:/files/label/{npy_name}', rasterized)
+"""END"""
+
+# with rasterio.open(img_file.replace('image', 'map'), 'w', **profile) as src:
+#     src.write(rasterized)
+
+# if poly.intersects(sat_poly):
+#     cnt += 1
+#     print(f)
+#     print(img_file)
 # print(cnt)
 
 # for f in glob.glob(f'{reg_path}/*.shp'):  # [test_name]
