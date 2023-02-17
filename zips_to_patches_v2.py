@@ -17,7 +17,7 @@ import fiona
 
 warnings.filterwarnings("ignore")
 reg_path = 'C:/files/regions/2021'
-save_path = 'C:/files/data'
+save_path = 'C:/files/union_data'
 workspace = 'D:/dag_img'
 
 setup_logging(verbose=1, no_progress_bar=True)
@@ -76,7 +76,7 @@ lz, ls = len(zip_paths), len(shapes_list)
 if lz == 0:
     sys.exit('nothing to extract')
 
-for i, f in tqdm(enumerate(shapes_list), ascii=True, desc=f"{reg}: {lz} zips for each in {ls}"):
+for f in tqdm(shapes_list, ascii=True, desc=f"{reg}: {lz} zips for each in {ls}"):
     dataset = gpd.read_file(f).to_crs('epsg:4326')
     nm = f.split("\\")[-1][4:].split("T")[0][5:7]
     dt = f.split('_')[2]
@@ -112,6 +112,7 @@ for i, f in tqdm(enumerate(shapes_list), ascii=True, desc=f"{reg}: {lz} zips for
             stack = product.stack(ok_bands)
 
             np_stack = stack.to_numpy()
+            print(np_stack.shape)
             resolution = product.resolution
             chunk_size = int((256 / 20) * 100)
 
@@ -153,7 +154,9 @@ for i, f in tqdm(enumerate(shapes_list), ascii=True, desc=f"{reg}: {lz} zips for
 
                         x_res, y_res = (x_max - x_min) / float(nx), (y_max - y_min) / float(ny)
                         geo_transform = (x_min, x_res, 0, y_max, 0, -y_res)
-                        tiff_name = f'{save_path}/{reg}_{dt}_{i}_{sx}_{sy}'
+                        tiff_name = f'{save_path}/{reg}_{dt}_{zip_id}_{sx}_{sy}'
+
+                        np.save(tiff_name, patch)
 
                         dst_ds = gdal.GetDriverByName('GTiff').Create(f'{tiff_name}.tiff', ny, nx, 3, gdal.GDT_Byte)
                         dst_ds.SetGeoTransform(geo_transform)  # specify coords
@@ -164,7 +167,6 @@ for i, f in tqdm(enumerate(shapes_list), ascii=True, desc=f"{reg}: {lz} zips for
                         dst_ds.GetRasterBand(2).WriteArray(patch[1])  # write g-band to the raster
                         dst_ds.GetRasterBand(3).WriteArray(patch[2])  # write b-band to the raster
                         dst_ds.FlushCache()
-                        np.save(tiff_name, patch)
 
                         patch_pol = Polygon([(x_min, y_min), (x_min, y_max), (x_max, y_max), (x_max, y_min)])
                         dataframe = gpd.GeoDataFrame({'geometry': [patch_pol], 'date': str(dt)})
