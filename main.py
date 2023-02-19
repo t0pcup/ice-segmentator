@@ -174,7 +174,6 @@ transforms_test = [
 ]
 
 data_dir = r'E:/files'
-classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']  # other = undefined / land / no data
 path_to_save = r'E:/files/pts'
 os.makedirs(path_to_save, exist_ok=True)
 model_name = 'NewLbl'

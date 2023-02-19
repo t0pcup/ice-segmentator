@@ -2,29 +2,12 @@ import os
 import rasterio.warp
 import numpy as np
 import warnings
-from my_lib import normalize, transforms_resize_img
+from my_lib import normalize, transforms_resize_img, save_tiff
 from PIL import Image
 
-warnings.filterwarnings("ignore")
-
-
-def save_tiff(full_name, im):
-    global profile
-    with rasterio.open(full_name, 'w', **profile) as src:
-        src.write(im)
-
-
+# warnings.filterwarnings("ignore")
 path = 'C:/files/'
-classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']
-palette0 = np.array([[0, 0, 0],  # other
-                     [32, 32, 255],  # <1
-                     [64, 64, 255],  # 1-3
-                     [128, 128, 255],  # 3-5
-                     [255, 255, 128],  # 5-7
-                     [255, 128, 64],  # 7-9
-                     [255, 64, 64],  # 9-10
-                     [255, 255, 255]])  # fast_ice
-
+#
 # palette0 = np.array([[50, 200, 50],    # land
 #                      [50, 50, 255],    # water
 #                      [0, 0, 0],        # 2
@@ -51,13 +34,13 @@ for file in os.listdir(f'{path}data/'):
     profile = rasterio.open(f'{path}data/{name}.tiff', 'r').profile
     profile['count'] = 2
 
-    images = np.empty(shape=(2, 1280, 1280))
-    images[:] = (normalize(np.load(f'{path}data/{name}.npy')) * 255).astype(np.uint8)
-    im_dst = np.asarray(images)[:3]
-    im_dst = im_dst.transpose((1, 2, 0))
-    im_dst = transforms_resize_img(image=im_dst)['image']
-    im_dst = im_dst.transpose((2, 0, 1))
-    save_tiff(f'{path}view/image/{name}.tiff', im_dst)  # , mask=label[:, :]
+    # images = np.empty(shape=(2, 1280, 1280))
+    # images[:] = (normalize(np.load(f'{path}data/{name}.npy')) * 255).astype(np.uint8)
+    # im_dst = np.asarray(images)[:3]
+    # im_dst = im_dst.transpose((1, 2, 0))
+    # im_dst = transforms_resize_img(image=im_dst)['image']
+    # im_dst = im_dst.transpose((2, 0, 1))
+    # save_tiff(f'{path}view/image/{name}.tiff', im_dst)  # , mask=label[:, :]
 
     # try:
     #     im_dst = np.load(f'{path}label/{name}.npy')

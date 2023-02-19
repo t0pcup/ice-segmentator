@@ -1,10 +1,15 @@
 import numpy as np
 import glob
-import os
+from tqdm import trange
 
-path = 'D:/data'
+path = 'E:/files/data'
+lst, ban = glob.glob(f'{path}/*.npy'), []
 
-regions = [reg.upper() for reg in os.listdir('C:/files/regions/2021') if len(reg) == 2]
-print(regions)
-for npy in glob.glob(f'{path}/*.shp'):
-    regions
+for i in trange(len(lst)):
+    for j in range(i, len(lst)):
+        if i != j and (np.load(lst[i]) == np.load(lst[j])).all():
+            print(j, end=' ')
+            ban.append((lst[i], lst[j]))
+
+print(len(ban))
+print(ban)

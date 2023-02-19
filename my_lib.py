@@ -4,9 +4,10 @@ import torch
 import torchvision.ops
 import segmentation_models_pytorch as smp
 from torch.nn import functional
+import rasterio.warp
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-fin_res = 256  # 128
+fin_res = 128  # 128
 transforms_val = albumentations.Compose([albumentations.CenterCrop(fin_res, fin_res, p=1.0, always_apply=False)])
 transforms_resize_img = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=3)])
 transforms_resize_lbl = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=0)])
@@ -17,6 +18,21 @@ model_ft = smp.DeepLabV3(
     in_channels=4,
     classes=8,
 ).to(device)
+
+classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']  # other = undefined / land / no data
+palette0 = np.array([[0, 0, 0],  # other
+                     [32, 32, 255],  # <1
+                     [64, 64, 255],  # 1-3
+                     [128, 128, 255],  # 3-5
+                     [255, 255, 128],  # 5-7
+                     [255, 128, 64],  # 7-9
+                     [255, 64, 64],  # 9-10
+                     [255, 255, 255]])  # fast_ice
+
+
+def save_tiff(full_name, im, profile):
+    with rasterio.open(full_name, 'w', **profile) as src:
+        src.write(im)
 
 
 def normalize(im: np.ndarray) -> np.ndarray:
