@@ -12,8 +12,8 @@ from datetime import date, timedelta
 import fiona
 
 warnings.filterwarnings("ignore")
-reg_path = 'E:/files/regions/2021'
-workspace = 'E:/files/dataloader'
+reg_path = 'C:/files/regions/2021'
+workspace = 'D:/dag_img'
 
 setup_logging(verbose=1, no_progress_bar=True)
 # setup_logging(verbose=2, no_progress_bar=False)
@@ -69,8 +69,8 @@ def scroll(pg):
 
 
 # TODO: GL, HB, WA, *EA
-for f in glob.glob('E:/files/regions/2021/*.shp'):
-    if 'cis_SGRDREC_' in f:
+for f in glob.glob('C:/files/regions/2021/*.shp'):
+    if 'SGRDREC_' in f:
         continue
     cnt, indexes = 0, verify(f)
     dataset = gpd.read_file(f).to_crs('epsg:4326')

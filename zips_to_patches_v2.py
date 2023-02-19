@@ -18,10 +18,10 @@ import fiona
 
 warnings.filterwarnings("ignore")
 reg_path = 'C:/files/regions/2021'
-# save_path = 'C:/files/data'
-# workspace = 'C:/files/small_dag_img'
-save_path = 'D:/data'
-workspace = 'D:/dag_img'
+save_path = 'C:/files/data'
+workspace = 'C:/files/dag_img'
+# save_path = 'D:/data'
+# workspace = 'D:/dag_img'
 
 setup_logging(verbose=1, no_progress_bar=True)
 translate_classes_simple = {
@@ -76,6 +76,7 @@ zip_paths = glob.glob(f'{workspace}/*1SDV*.zip')
 lz = len(zip_paths)
 if lz == 0:
     sys.exit('nothing to extract')
+print(lz == len(glob.glob(f'{workspace}/*.zip')))
 
 for zip_id in range(len(zip_paths)):
     if not os.path.isfile(zip_paths[zip_id]):
@@ -106,10 +107,10 @@ for zip_id in range(len(zip_paths)):
 
         bands = [VV, HH, VV_DSPK, HH_DSPK, VH, VH_DSPK]
         ok_bands = [band for band in bands if product.has_band(band)]
-        # print(f"Intersection: {inter_area:.6f}\tOKAY: {ok_bands}")
-        # print(f"PRODUCT BANDS: {product}")
-        stack = product.stack(ok_bands)
+        if len(ok_bands) != 4:
+            continue
 
+        stack = product.stack(ok_bands)
         np_stack = stack.to_numpy()
         resolution = product.resolution
         chunk_size = int((256 / 20) * 100)
@@ -177,6 +178,8 @@ for zip_id in range(len(zip_paths)):
                 except:
                     print(f'FAIL at {sx}-{sy}', end='')
                     pass
+
+    os.remove(full_path)
 # TODO: убрать дубликаты
 
 """v2"""
