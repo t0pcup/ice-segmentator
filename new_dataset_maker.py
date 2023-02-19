@@ -68,8 +68,8 @@ def scroll(pg):
     return lst
 
 
-# TODO: GL, HB, WA
-for f in glob.glob('E:/files/regions/2021/*EC*.shp')[11:]:
+# TODO: GL, HB, WA, *EA
+for f in glob.glob('E:/files/regions/2021/*.shp'):
     if 'cis_SGRDREC_' in f:
         continue
     cnt, indexes = 0, verify(f)
