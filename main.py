@@ -1,128 +1,34 @@
-import numpy as np
 import os
 import time
 import copy
-import torch
-import torchvision.ops
+from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
-from torch.nn import functional
 from torch.utils.data import Dataset, DataLoader
-import albumentations
-from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, roc_auc_score
+# from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score, roc_auc_score TODO
 from tqdm import tqdm
-import segmentation_models_pytorch as smp
+from segmentation_models_pytorch.metrics import get_stats, iou_score, accuracy, balanced_accuracy, f1_score
 import torch.nn as nn
-import matplotlib.pyplot as plt
 import warnings
+from my_lib import *
 
 warnings.filterwarnings('ignore')
-
-# print(f"Is CUDA supported by this system? {torch.cuda.is_available()}")
-# print(f"CUDA version: {torch.version.cuda}")
-#
-# cuda_id = torch.cuda.current_device()
-# print(f"ID of current CUDA device:{torch.cuda.current_device()}")
-#
-# print(f"Name of current CUDA device:{torch.cuda.get_device_name(cuda_id)}")
-
-loss_history, test_loss_history = [], []
-f1_history, test_f1_history = [], []
-miou_history, test_miou_history = [], []
-acc_history, test_acc_history = [], []
+torch.cuda.empty_cache()
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
+print(os.environ["PYTORCH_CUDA_ALLOC_CONF"])
 
 
-# roc_history, test_roc_history = [], [] TODO
-
-
-def fin_plotter(train_h, test_h, color, title, xt_, yt_, xl_, yl_):
-    plt.figure(dpi=250)
-    plt.plot(train_h, color=color, label='train', alpha=0.4)
-    plt.plot(test_h, color=color, label='test')
-    plt.xticks(xt_)
-    plt.yticks(yt_)
-    plt.xlim(0, xl_)
-    plt.ylim(*yl_)
-    plt.grid(True)
-    plt.title(title)
-    plt.legend()
-    plt.show()
-
-
-def double_exponential_smoothing(data, alpha=0.0, beta=0.0):
-    result = [data[0]]
-    for n in range(1, len(data) + 1):
-        if n == 1:
-            level, trend = data[0], data[1] - data[0]
-        if n >= len(data):  # прогнозируем
-            value = result[-1]
-        else:
-            value = data[n]
-        last_level, level = level, alpha * value + (1 - alpha) * (level + trend)
-        trend = beta * (level - last_level) + (1 - beta) * trend
-        result.append(level + trend)
-
-    return [result[0:len(result) - 1], f"Double exp: a{alpha}, b{beta}"]
-
-
-def clear_gpu():
-    import gc
-    try:
-        del model_ft
-    except NameError:
-        print('There is no model with that name')
-    gc.collect()
-    torch.cuda.empty_cache()
-
-
-def tversky_loss(true, logits, alpha=0.5, beta=0.5, eps=1e-7):
-    """Computes the Tversky loss [1].
-    Args:
-        true: a tensor of shape [B, H, W] or [B, 1, H, W].
-        logits: a tensor of shape [B, C, H, W]. Corresponds to
-            the raw output or logits of the model.
-        alpha: controls the penalty for false positives.
-        beta: controls the penalty for false negatives.
-        eps: added to the denominator for numerical stability.
-    Returns:
-        tversky_loss: the Tversky loss.
-    Notes:
-        alpha = beta = 0.5 => dice coefficient
-        alpha = beta = 1 => tanimoto coefficient
-        alpha + beta = 1 => F beta coefficient
-    References:
-        [1]: https://arxiv.org/abs/1706.05721
-    """
-    num_classes = logits.shape[1]
-    true_1_hot = torch.eye(num_classes, device=true.device)[true.squeeze(1)]
-    true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
-    probas = functional.softmax(logits, dim=1)
-
-    true_1_hot = true_1_hot.type(logits.type())
-    dims = (0,) + tuple(range(2, true_1_hot.ndimension()))
-    intersection = torch.sum(probas * true_1_hot, dims)
-    fps = torch.sum(probas * (1 - true_1_hot), dims)
-    fns = torch.sum((1 - probas) * true_1_hot, dims)
-    num = intersection
-    denominate = intersection + (alpha * fps) + (beta * fns)
-    return 1 - (num / (denominate + eps)).mean()
-
-
-def train_model(model, device_, dataset_loader, criterion_, optimizer,
+def train_model(model, loader, criterion_, optimizer,
                 model_path, mod_name, dataset_size, epochs=25, save=False):
-    def mean_iou(y_true, y_pred_):
-        _and = np.logical_and(y_true, y_pred_).sum()
-        _or = np.logical_or(y_true, y_pred_).sum()
-        return _and / _or
-
     since = time.time()
-    global loss_history, f1_history, miou_history, acc_history
-    global test_loss_history, test_f1_history, test_miou_history, test_acc_history
     best_model_wts = copy.deepcopy(model.state_dict())
     best_miou = 0.0
     best_epoch = 0
-    # ce = nn.CrossEntropyLoss(ignore_index=0)
+    writer_dir = 'E:/files/history'
+    os.makedirs(f"{writer_dir}/{v}", exist_ok=True)
+    writer = SummaryWriter(f"{writer_dir}/{v}")
 
     for epo in range(epochs):
+        torch.cuda.empty_cache()
         # Each epoch has a training and validation phase
         for phase in ['train', 'test']:
             if phase == 'train':
@@ -132,15 +38,14 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
 
             running_loss = 0.0
             running_pix_f1 = 0.0
+            running_pix_b_acc = 0.0
             running_pix_acc = 0.0
             running_miou = 0.0
-            running_roc = 0.0
-            ls = np.array([])
-            ps = np.array([])
+            # running_roc = 0.0
             # Iterate over data.
-            for i, (inputs, labels) in enumerate(tqdm(dataset_loader[phase], desc=f'Epoch {epo}/{epochs - 1} {phase}')):
-                inputs = inputs.to(device_)
-                labels = labels.to(device_)
+            for i, (inputs, labels) in enumerate(tqdm(loader[phase], desc=f'Epoch {epo}/{epochs - 1} {phase}')):
+                inputs = inputs.to(device)
+                labels = labels.to(device)
 
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -157,9 +62,8 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
                     # loss = criterion_(labels.unsqueeze(1), outputs['out'])
                     # loss = criterion_(outputs['out'], labels, ce)
                     # loss = criterion_(outputs, labels, ce)
-                    criterion_ = criterion_.to(device)
-                    loss = criterion_(outputs, labels)
                     # loss = criterion_(labels.unsqueeze(1), outputs)  # use for dice, tversky and jaccard losses
+                    loss = criterion_(outputs, labels)
 
                     # backward + optimize only if in training phase
                     if phase == 'train':
@@ -174,112 +78,37 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
 
                 l_ = torch.flatten(labels).cpu().detach().numpy()
                 p = torch.flatten(y_pred).cpu().detach().numpy()
-                if len(ls) == 0:
-                    ls = l_
-                    ps = p
-                else:
-                    np.append(ls, l_)
-                    np.append(ps, p)
-                running_pix_acc += balanced_accuracy_score(l_, p) * inputs.size(0)  # , sample_weight=[1, 0.9, 1]
-                running_pix_f1 += f1_score(l_, p, average='micro') * inputs.size(0)
-                running_miou += mean_iou(l_, p) * inputs.size(0)
-                # running_roc += roc_auc_score(l_, p) * inputs.size(0)
+                # writer.add_image(phase + ' | sample predict', y_pred)
 
-            epoch_loss = running_loss / dataset_size[phase]
-            mean_epoch_pix_f1 = running_pix_f1 / dataset_size[phase]
-            epoch_pix_acc = running_pix_acc / dataset_size[phase]
-            epoch_miou = running_miou / dataset_size[phase]
-            epoch_roc = running_roc / dataset_size[phase]
+                # TODO: get rid of l_ and p, go for labels and y_pred
+                output, target = torch.LongTensor(p.astype(int)), torch.LongTensor(l_.astype(int))
+                st = get_stats(output, target, mode='multiclass', num_classes=8)
 
-            # print('{} Loss: {:.4f} Acc: {:.4f} IoU: {:.4f}'.format(
-            #     phase, epoch_loss, epoch_pix_acc, epoch_miou))
-            if phase == 'train':
-                loss_history.append(epoch_loss)
-                f1_history.append(mean_epoch_pix_f1)
-                acc_history.append(epoch_pix_acc)
-                miou_history.append(epoch_miou)
-                # roc_history.append(epoch_roc) TODO
-            else:
-                test_loss_history.append(epoch_loss)
-                test_f1_history.append(mean_epoch_pix_f1)
-                test_acc_history.append(epoch_pix_acc)
-                test_miou_history.append(epoch_miou)
-                # test_roc_history.append(epoch_roc) TODO
+                # choose reduction from: micro, macro, weighted, micro-imagewise, macro-imagewise
+                red = 'weighted'
+                ws = [0, 0.4, *([1] * 6)] if red == 'weighted' else None
+                running_miou += iou_score(*st, reduction=red, class_weights=ws) * inputs.size(0)
+                running_pix_b_acc += balanced_accuracy(*st, reduction=red, class_weights=ws) * inputs.size(0)
+                running_pix_acc += accuracy(*st, reduction=red, class_weights=ws) * inputs.size(0)
+                running_pix_f1 += f1_score(*st, reduction=red, class_weights=ws) * inputs.size(0)
 
-            print('{} Loss: {:.4f} F1: {:.4f} Acc: {:.4} IoU: {:.4f}'.format(
-                phase, epoch_loss, mean_epoch_pix_f1, epoch_pix_acc, epoch_miou))
+                # print(f"micro={mi}\tmacro={ma}\tweighted={wg}\tmicro-imagewise={mii}\tmacro-imagewise={mai}\t")
 
-            if epo == 0 and phase == 'train':
-                min_y = min([f1_history[0], miou_history[0], acc_history[0]])
-                max_y = loss_history[0]
-            else:
-                if phase == 'train':
-                    min_y = min([min(f1_history), min(miou_history), min(acc_history)])
-                    max_y = max(loss_history)
-                else:
-                    min_y = min([min(test_f1_history), min(test_miou_history), min(test_acc_history)])
-                    max_y = max(test_loss_history)
-            # min(roc_history), min(test_roc_history), TODO
+            epo_loss = float(running_loss) / dataset_size[phase]
+            epo_pix_f1 = float(running_pix_f1) / dataset_size[phase]
+            epo_pix_b_acc = float(running_pix_b_acc) / dataset_size[phase]
+            epo_pix_acc = float(running_pix_acc) / dataset_size[phase]
+            epo_miou = float(running_miou) / dataset_size[phase]
 
-            yl = [min_y - 0.1, max_y + 0.1]
-            yt = np.arange(yl[0], yl[1], 0.1)
-            st = 5 * (1 + int(epo > 70) + int(epo > 150))
-            xt = [st * i for i in range((epo % st != 0) + 1 + epo // st)]
+            writer.add_scalar(phase + ' | loss', epo_loss, epo)
+            writer.add_scalar(phase + ' | f1', epo_pix_f1, epo)
+            writer.add_scalar(phase + ' | accuracy', epo_pix_acc, epo)
+            writer.add_scalar(phase + ' | b_accuracy', epo_pix_b_acc, epo)
+            writer.add_scalar(phase + ' | mean_IoU', epo_miou, epo)
 
-            # if epo + 1 == epochs and phase == 'test':
-            #     plt.figure(dpi=250)
-            #     plt.plot(loss_history, color='r', alpha=0.4)
-            #     plt.plot(f1_history, color='g', alpha=0.4)
-            #     plt.plot(acc_history, color='orange', alpha=0.4)
-            #     plt.plot(miou_history, color='b', alpha=0.4)
-            #     # plt.plot(roc_history, color='purple', alpha=0.4) TODO
-            #     plt.plot(test_loss_history, color='r', label='loss')
-            #     plt.plot(test_f1_history, color='g', label='F1')
-            #     plt.plot(test_acc_history, color='orange', label='Acc')
-            #     plt.plot(test_miou_history, color='b', label='IoU')
-            #     # plt.plot(test_roc_history, color='purple', label='ROC') TODO
-            #     plt.xticks(xt)
-            #     plt.yticks(yt)
-            #     plt.xlim(0, epo)
-            #     plt.ylim(*yl)
-            #     plt.grid(True)
-            #     plt.title('Fin plots comparison')
-            #     plt.legend()
-            #     plt.show()
-            #
-            #     fin_plotter(loss_history, test_loss_history, 'r', 'Fin Loss comparison', xt, yt, epo, yl)
-            #     fin_plotter(f1_history, test_f1_history, 'g', 'Fin F1 comparison', xt, yt, epo, yl)
-            #     fin_plotter(miou_history, test_miou_history, 'b', 'Fin IoU comparison', xt, yt, epo, yl)
-            #     fin_plotter(acc_history, test_acc_history, 'orange', 'Fin Acc comparison', xt, yt, epo, yl)
-            #     # fin_plotter(roc_history, test_roc_history, 'orange', 'Fin Acc comparison', xt, yt, epo, yl) TODO
-
-            if epo % 10 == 0 or epo + 1 == epochs:
-                plt.figure(dpi=250)
-                choice = phase == 'test'
-                xs = [loss_history, test_loss_history][choice]
-                plt.plot(xs, color='r', label='loss')
-                plt.plot([np.min(xs) for _ in xs], color='r', alpha=0.4)
-
-                xs = [miou_history, test_miou_history][choice]
-                plt.plot(xs, color='b', label='IoU')
-                plt.plot([np.max(xs) for _ in xs], color='b', alpha=0.4)
-
-                xs = [f1_history, test_f1_history][choice]
-                plt.plot(xs, color='g', label='F1')
-                plt.plot([np.max(xs) for _ in xs], color='g', alpha=0.4)
-
-                xs = [acc_history, test_acc_history][choice]
-                plt.plot(xs, color='orange', label='Acc')
-                plt.plot([np.max(xs) for _ in xs], color='orange', alpha=0.4)
-
-                plt.xticks(xt)
-                plt.yticks(yt)
-                plt.xlim(0, epo)
-                plt.ylim(*yl)
-                plt.grid(True)
-                plt.title(f'{phase} plots')
-                plt.legend()
-                plt.show()
+            ph = 'test ' if phase == 'test' else 'train'
+            print(f'{ph} Loss: {epo_loss:.4f} F1: {epo_pix_f1:.4f} Acc: {epo_pix_acc:.4f} ' +
+                  f'bAcc: {epo_pix_b_acc:.4f} IoU: {epo_miou:.4f}')
 
             if phase == 'train' and save:
                 torch.save({
@@ -287,13 +116,13 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
                 }, f'{model_path}/{mod_name}_{epo}.pth')
 
             # deep copy the model
-            if phase == 'test' and epoch_miou > best_miou:  # TODO: try accuracy
-                best_miou = epoch_miou
+            if phase == 'test' and epo_miou > best_miou:
+                best_miou = epo_miou
                 best_model_wts = copy.deepcopy(model.state_dict())
                 best_epoch = epo
-            print()
 
     time_elapsed = time.time() - since
+    writer.close()
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print('Best test iou: {:4f}'.format(best_miou))
     print(f'Best epoch: {best_epoch}')
@@ -303,25 +132,13 @@ def train_model(model, device_, dataset_loader, criterion_, optimizer,
     return model, best_miou
 
 
-test_iou = 0
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(device)
-batch = 16
-
-data_dir = r'E:/files'
-classes = ['land', 'water', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'no data', 'ice shelf', 'undefined']
-path_to_save = r'E:/files/pts'
-os.makedirs(path_to_save, exist_ok=True)
-model_name = 'NewLbl'
-
-
 class CrossValDataSet(Dataset):
-    def __init__(self, datapath, transforms_, parts, val_part, part, rgb_shift):
+    def __init__(self, path, transforms_, parts, val_part, part, rgb_shift):
         if val_part > parts - 1 or val_part < 0:
             print('val_part should be < parts-1 and >=0')
         self.part = part
-        self.datapath = datapath
-        self.train_list = os.listdir(f'{datapath}/label')
+        self.path = path
+        self.train_list = os.listdir(f'{path}/label')
         self.val_list = []
 
         for i in range(len(self.train_list) // parts):
@@ -330,96 +147,57 @@ class CrossValDataSet(Dataset):
         while 0 in self.train_list:
             self.train_list.remove(0)
         self.rgb_shift = rgb_shift
-        self.transforms = None
-        if transforms_:
-            self.transforms = albumentations.Compose(transforms_)
-            self.transforms_test = albumentations.Compose(transforms_test)
-        self.transforms_val = albumentations.Compose(transforms_val)
+        self.transforms = albumentations.Compose(transforms_)
+        # if transforms_:
+        #     self.transforms = albumentations.Compose(transforms_)
+        #     self.transforms_test = albumentations.Compose(transforms_test)
 
     def __len__(self):
         return len([self.train_list, self.val_list][self.part == 'val'])
 
     def __getitem__(self, index):
         file_name = self.train_list[index] if self.part == 'train' else self.val_list[index]
-
-        img = np.load(f'{self.datapath}/data/{file_name}')
-        label = np.load(f'{self.datapath}/label/{file_name}')
-
-        # min_v, max_v = np.min(img), np.max(img)
-        min_v, max_v = -84.64701, 4.379311  # TODO: сравнить
-        img = ((img + min_v) / (abs(max_v) - abs(min_v) + 1) * 255).astype(np.uint8)
-
-        img = img.transpose(1, 2, 0)
-        if self.transforms:
-            augmented = self.transforms_test(image=img, mask=label[:, :])
-        else:
-            augmented = self.transforms_val(image=img, mask=label[:, :])
-        img = augmented['image']
-        label = augmented['mask']
-
-        img = img.transpose(2, 0, 1)
-        return img, label
-
-
-def coll_fn(batch_):
-    imgs_, labels_ = [], []
-    for _, sample in enumerate(batch_):
-        img, label = sample
-        imgs_.append(torch.from_numpy(img.copy()))
-        labels_.append(torch.from_numpy(label.copy()))
-    return torch.stack(imgs_, 0).type(torch.FloatTensor), torch.stack(labels_, 0).type(torch.LongTensor)
+        image, label = item_getter(self.path, file_name, transforms=self.transforms)
+        return image, label
 
 
 transforms = [
-    albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
-    albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
+    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
-    albumentations.RandomCrop(256, 256, always_apply=False, p=1.0)
 ]
 transforms_test = [
-    albumentations.Resize(256, 256),
+    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0),
     albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
 ]
-transforms_val = [albumentations.Resize(1280, 1280, interpolation=3)]
 
-dataset = {'train': CrossValDataSet(data_dir, transforms_val, 5, 1, 'train', True),
-           'test': CrossValDataSet(data_dir, transforms_val, 5, 1, 'val', False)}
+data_dir = r'E:/files'
+path_to_save = r'E:/files/pts'
+os.makedirs(path_to_save, exist_ok=True)
+model_name = 'NewLbl'
+batch = 16
+print(device, batch)
+
+dataset = {'train': CrossValDataSet(data_dir, transforms, 5, 1, 'train', True),
+           'test': CrossValDataSet(data_dir, transforms_test, 5, 1, 'val', False)}
 dataloader = {'train': DataLoader(dataset['train'], batch_size=batch, shuffle=True, num_workers=0,
                                   collate_fn=coll_fn),  # , drop_last=True
               'test': DataLoader(dataset['test'], batch_size=batch, shuffle=False, num_workers=0,
                                  collate_fn=coll_fn)}  # , drop_last=True
 
-dataset_sizes = {x: len(dataset[x]) for x in ['train', 'test']}
+sizes = {x: len(dataset[x]) for x in ['train', 'test']}
 
-model_ft = smp.DeepLabV3(
-    encoder_name="timm-mobilenetv3_small_minimal_100",  # efficientnet-b0
-    encoder_weights=None,
-    in_channels=4,
-    classes=14,
-)
-
-model_ft = model_ft.to(device)
 # criterion = tversky_loss
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(ignore_index=0)
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([[1, 0.75, 1.25]]))
 # criterion = torchvision.ops.sigmoid_focal_loss
 
-# optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
-optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01)
+optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
-model_ft, iou = train_model(model_ft, device, dataloader, criterion, optimizer_ft, path_to_save, model_name,
-                            dataset_sizes, 100, False)
-
-torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_v0.1.pth')
+v = 'weighted_X1'
+model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 15)
+torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_{v}.pth')
 # torch.save(model_ft.state_dict(), f'{path_to_save}/{model_name}_v3.pth')
-
-# TODO: 1. посмотреть на карте (узнать как наложить labels/masks на карту)
-# 2. f1_score на общей матрице +
-# 3. пересобрать патчи (1.2 -> 2.5) +
-# 4. пилить графики +
-# TODO: * для участка построить карту labels и карту predicts (+img) !!!
-# banned: 2021-06-14_3_1
