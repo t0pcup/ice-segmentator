@@ -86,7 +86,7 @@ def train_model(model, loader, criterion_, optimizer,
 
                 # choose reduction from: micro, macro, weighted, micro-imagewise, macro-imagewise
                 red = 'weighted'
-                ws = [0, *([1] * 7)] if red == 'weighted' else None
+                ws = [0, 0.4, *([1] * 6)] if red == 'weighted' else None
                 running_miou += iou_score(*st, reduction=red, class_weights=ws) * inputs.size(0)
                 running_pix_b_acc += balanced_accuracy(*st, reduction=red, class_weights=ws) * inputs.size(0)
                 running_pix_acc += accuracy(*st, reduction=red, class_weights=ws) * inputs.size(0)

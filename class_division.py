@@ -1,15 +1,8 @@
 import warnings
-from shapely.ops import cascaded_union, unary_union
-from shapely.geometry import Polygon, box
-import os
+from shapely.geometry import box
 import glob
-from eodag.api.core import EODataAccessGateway
-from eodag import setup_logging
 import geopandas as gpd
 from tqdm import tqdm
-from eoreader.reader import Reader
-from eoreader.bands import *
-import rasterio
 import matplotlib.pyplot as plt
 import rasterio
 from rasterio import features
@@ -88,12 +81,11 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
                 continue
             prop = file[i]
             geom_value.append((geom_, def_num(prop['properties'])))
-        # print(geom_value)
 
         rasterized = features.rasterize(geom_value, out_shape=sat_img.shape, transform=sat_img.transform,
                                         all_touched=True, fill=0, merge_alg=MergeAlg.replace, dtype=np.int16)
 
-        if sum(rasterized) == 0:
+        if rasterized.sum() == 0:
             continue
 
         if len(np.unique(rasterized)) > 3:
@@ -115,61 +107,11 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
         im_dst = im_dst.transpose((1, 2, 0))
         im_dst = transforms_resize_img(image=im_dst)['image']
         im_dst = im_dst.transpose((2, 0, 1))
-        save_tiff(f'E:/files/view/image/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)  # , mask=label[:, :]
+        save_tiff(f'E:/files/view/image/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)
 
         try:
-            # im_dst = np.load(f'{path}label/{name}.npy')
             im_dst = rasterized
             im_dst = palette0[im_dst[:][:]].astype(np.uint8).transpose((2, 0, 1))
             save_tiff(f'E:/files/view/map/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)
         except:
             continue
-
-# for f in glob.glob(f'{reg_path}/*.shp'):
-#     shapes_list = gpd.read_file(f).to_crs('epsg:4326')
-#     file = fiona.open(f)
-#     # print(len(file))
-#     poly = unary_union(shapes_list['geometry'])
-#
-#     dt = f.split('_')[2]
-#     dt = [dt[:4], dt[4:6], dt[6:8]]
-#     print(str(dt))
-#     for img_file in white_list_images:
-#         if not '-'.join(dt) in img_file:
-#             continue
-#
-#         sat_img = rasterio.open(img_file, 'r')
-#         bb, profile = sat_img.bounds, sat_img.profile
-#         sat_poly = box(*bb, ccw=True)
-#
-#         geom_value = []
-#         for i in range(len(file)):
-#             geom_ = shapes_list.geometry[i].intersection(sat_poly)
-#             if geom_.area == 0:
-#                 cnt += 1
-#                 continue
-#             prop = file[i]
-#             geom_value.append((geom_, def_num(prop['properties'])))
-#         # print(geom_value)
-#
-#         rasterized = features.rasterize(geom_value,
-#                                         out_shape=sat_img.shape,
-#                                         transform=sat_img.transform,
-#                                         all_touched=True,
-#                                         fill=0,  # undefined
-#                                         merge_alg=MergeAlg.replace,
-#                                         dtype=np.int16)
-#
-#         if rasterized.all() == 0:
-#             continue
-#         if len(geom_value) > 5:
-#             fig, ax = plt.subplots(1, figsize=(10, 10))
-#             show(rasterized, ax=ax)
-#             plt.gca().invert_yaxis()
-#             plt.show()
-#
-#         npy_name = img_file.split('image/')[1].split('.')[0]
-#         np.save(f'E:/files/label/{npy_name}', rasterized)
-#
-#         # with rasterio.open(img_file.replace('image', 'map'), 'w', **profile) as src:
-#         #     src.write(rasterized)
