@@ -1,5 +1,6 @@
 import warnings
 from shapely.geometry import Polygon
+from shapely.ops import unary_union
 import os
 import glob
 from eodag.api.core import EODataAccessGateway
@@ -11,8 +12,8 @@ from datetime import date, timedelta
 import fiona
 
 warnings.filterwarnings("ignore")
-reg_path = 'C:/files/regions/2021'
-workspace = 'C:/files/dataloader'
+reg_path = 'E:/files/regions/2021'
+workspace = 'E:/files/dataloader'
 
 setup_logging(verbose=1, no_progress_bar=True)
 # setup_logging(verbose=2, no_progress_bar=False)
@@ -39,7 +40,6 @@ with open(f'{workspace}/eodag_conf.yml', "w") as f_yml:
 dag = EODataAccessGateway(f'{workspace}/eodag_conf.yml')
 product_type = 'S1_SAR_GRD'
 dag.set_preferred_provider("peps")
-cnt = 0
 
 
 def verify(file: str):
@@ -54,9 +54,25 @@ def verify(file: str):
     return idx
 
 
-# got 5XX status code on GL, to be done: EC, HB, WA
-for f in glob.glob('C:/files/regions/2021/*EC*.shp'):
-    indexes = verify(f)
+def scroll(pg):
+    lst = []
+    for elt in pg:
+        # if {'1SDH', 'EW'} & set(elt.properties["title"].split('_')):
+        #     continue
+        if {'1SDV', 'IW'} & set(elt.properties["title"].split('_')):
+            try:
+                product_path = elt.download(extract=False)
+                lst.append(product_path)
+            except:
+                pass
+    return lst
+
+
+# TODO: GL, HB, WA
+for f in glob.glob('E:/files/regions/2021/*EC*.shp')[11:]:
+    if 'cis_SGRDREC_' in f:
+        continue
+    cnt, indexes = 0, verify(f)
     dataset = gpd.read_file(f).to_crs('epsg:4326')
     nm = f.split("\\")[-1][4:].split("T")[0][5:7]
     dt = f.split('_')[2]
@@ -66,23 +82,37 @@ for f in glob.glob('C:/files/regions/2021/*EC*.shp'):
     search_criteria = {
         "productType": product_type,
         "start": f'{dt}T00:00:00',
-        "end": f'{new_dt}T23:59:59',
-        # "end": f'{dt}T23:59:59',
+        # "end": f'{new_dt}T23:59:59',
+        "end": f'{dt}T23:59:59',
         "geom": None,
         "items_per_page": 500,
+        "page": 0
     }
 
-    for item in tqdm(dataset['geometry'].iloc[indexes], desc=desc, ascii=True):
-        poly = search_criteria["geom"] = Polygon(item)
-        first_page, estimated = dag.search(**search_criteria)
-        # time.sleep(2)
-        if estimated == 0:
-            continue
+    # for item in tqdm(dataset['geometry'].iloc[indexes], desc=desc, ascii=True):
+    #     poly = search_criteria["geom"] = Polygon(item)
+    #     first_page, estimated = dag.search(**search_criteria)
+    #     # time.sleep(2)
+    #     if estimated == 0:
+    #         continue
+    #
+    #     for elt in first_page:
+    #         if {'1SDH', 'EW'} & set(elt.properties["title"].split('_')):  # {'1SDV', 'IW'}
+    #             continue
+    #         try:
+    #             product_path = elt.download(extract=False)
+    #             cnt += 1
+    #         except:
+    #             pass
+    # print(f'got {cnt} products')
 
-        for elt in first_page:
-            if {'1SDH', 'EW'} & set(elt.properties["title"].split('_')):
-                continue
-            try:
-                product_path = elt.download(extract=False)
-            except:
-                pass
+    poly = search_criteria["geom"] = Polygon(unary_union(dataset['geometry'].iloc[indexes]))
+    page, estimated = dag.search(**search_criteria)
+    amt = len(scroll(page))
+
+    # if estimated > 500:
+    #     search_criteria["page"] = 1
+    #     page, _ = dag.search(**search_criteria)
+    #     amt += len(scroll(page))
+
+    print(amt)
