@@ -6,8 +6,8 @@ import segmentation_models_pytorch as smp
 from torch.nn import functional
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-fin_res = 128
-transforms_val = albumentations.Compose([albumentations.CenterCrop(fin_res, fin_res, always_apply=False, p=1.0)])
+fin_res = 256  # 128
+transforms_val = albumentations.Compose([albumentations.CenterCrop(fin_res, fin_res, p=1.0, always_apply=False)])
 transforms_resize_img = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=3)])
 transforms_resize_lbl = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=0)])
 
@@ -39,7 +39,7 @@ def coll_fn(batch_):
     return torch.stack(ims_, 0).type(torch.FloatTensor), torch.stack(labels_, 0).type(torch.LongTensor)
 
 
-def item_getter(path: str, file_name: str, transforms = transforms_val) -> (np.ndarray, np.ndarray):
+def item_getter(path: str, file_name: str, transforms=transforms_val) -> (np.ndarray, np.ndarray):
     image = normalize(np.load(f'{path}/data/{file_name}'))
     label = np.load(f'{path}/label/{file_name}')
 

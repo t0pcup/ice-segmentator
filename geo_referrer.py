@@ -2,6 +2,7 @@ import os
 import rasterio.warp
 import numpy as np
 import warnings
+from my_lib import normalize, transforms_resize_img
 from PIL import Image
 
 warnings.filterwarnings("ignore")
@@ -13,7 +14,7 @@ def save_tiff(full_name, im):
         src.write(im)
 
 
-path = 'E:/files/'
+path = 'C:/files/'
 classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']
 palette0 = np.array([[0, 0, 0],  # other
                      [32, 32, 255],  # <1
@@ -42,30 +43,30 @@ palette0 = np.array([[0, 0, 0],  # other
 names = os.listdir(f'{path}view/image/')
 
 # for file in os.listdir(f'{path}view/raw_pred/'):
-for file in os.listdir(f'{path}label/'):
+for file in os.listdir(f'{path}data/'):
     if 'npy' in file[:-4]:
         continue
     name = file.split('.')[0]
 
     profile = rasterio.open(f'{path}data/{name}.tiff', 'r').profile
-    profile['count'] = 3
+    profile['count'] = 2
 
-    # images = np.empty(shape=(4, 1280, 1280))
-    # images[:] = ((np.load(f'{path}data/{name}.npy') + min_v) / (max_v - abs(min_v) + 1) * 255).astype(np.uint8)
-    # im_dst = np.asarray(images)[:3]
-    # im_dst = im_dst.transpose((1, 2, 0))
-    # tr = albumentations.Compose([albumentations.Resize(640, 640, interpolation=3)])(image=im_dst)
-    # im_dst = tr['image']
-    # im_dst = im_dst.transpose((2, 0, 1))
-    # save_tiff(f'{path}view/image/{name}.tiff', im_dst)  # , mask=label[:, :]
+    images = np.empty(shape=(2, 1280, 1280))
+    images[:] = (normalize(np.load(f'{path}data/{name}.npy')) * 255).astype(np.uint8)
+    im_dst = np.asarray(images)[:3]
+    im_dst = im_dst.transpose((1, 2, 0))
+    im_dst = transforms_resize_img(image=im_dst)['image']
+    im_dst = im_dst.transpose((2, 0, 1))
+    save_tiff(f'{path}view/image/{name}.tiff', im_dst)  # , mask=label[:, :]
 
-    try:
-        im_dst = np.load(f'{path}label/{name}.npy')
-        im_dst = palette0[im_dst[:][:]].astype(np.uint8).transpose((2, 0, 1))
-        save_tiff(f'{path}view/map/{name}.tiff', im_dst)
-    except FileNotFoundError:
-        continue
+    # try:
+    #     im_dst = np.load(f'{path}label/{name}.npy')
+    #     im_dst = palette0[im_dst[:][:]].astype(np.uint8).transpose((2, 0, 1))
+    #     save_tiff(f'{path}view/map/{name}.tiff', im_dst)
+    # except FileNotFoundError:
+    #     continue
 
+    # -----------------------
     # try:
     #     im_dst = np.asarray(Image.open(f'{path}view/raw_pred/{name}.gif'))
     #     im_dst = palette0[im_dst[:][:]].astype(np.uint8).transpose((2, 0, 1))
