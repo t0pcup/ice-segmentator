@@ -82,13 +82,16 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
             prop = file[i]
             geom_value.append((geom_, def_num(prop['properties'])))
 
+        if len(geom_value) == 0:
+            continue
+
         rasterized = features.rasterize(geom_value, out_shape=sat_img.shape, transform=sat_img.transform,
                                         all_touched=True, fill=0, merge_alg=MergeAlg.replace, dtype=np.int16)
 
         if rasterized.sum() == 0:
             continue
 
-        if len(np.unique(rasterized)) > 3:
+        if len(np.unique(rasterized)) > 4:
             fig, ax = plt.subplots(1, figsize=(10, 10))
             show(rasterized, ax=ax)
             plt.gca().invert_yaxis()
@@ -98,20 +101,20 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
         npy_name = np_full_name.split('\\')[1]
         np.save(f'E:/files/label/{npy_name}', rasterized)
 
-        profile = sat_img.profile
-        profile['count'] = 3
-
-        images = np.empty(shape=(4, 1280, 1280))
-        images[:] = (normalize(np.load(np_full_name)) * 255).astype(np.uint8)
-        im_dst = np.asarray(images)[:3]
-        im_dst = im_dst.transpose((1, 2, 0))
-        im_dst = transforms_resize_img(image=im_dst)['image']
-        im_dst = im_dst.transpose((2, 0, 1))
-        save_tiff(f'E:/files/view/image/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)
-
-        try:
-            im_dst = rasterized
-            im_dst = palette0[im_dst[:][:]].astype(np.uint8).transpose((2, 0, 1))
-            save_tiff(f'E:/files/view/map/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)
-        except:
-            continue
+        # profile = sat_img.profile
+        # profile['count'] = 3
+        #
+        # images = np.empty(shape=(4, 1280, 1280))
+        # images[:] = (normalize(np.load(np_full_name)) * 255).astype(np.uint8)
+        # im_dst = np.asarray(images)[:3]
+        # im_dst = im_dst.transpose((1, 2, 0))
+        # im_dst = transforms_resize_img(image=im_dst)['image']
+        # im_dst = im_dst.transpose((2, 0, 1))
+        # save_tiff(f'E:/files/view/image/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)
+        #
+        # try:
+        #     im_dst = rasterized
+        #     im_dst = palette0[im_dst[:][:]].astype(np.uint8).transpose((2, 0, 1))
+        #     save_tiff(f'E:/files/view/map/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)
+        # except:
+        #     continue
