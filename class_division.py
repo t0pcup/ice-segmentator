@@ -10,6 +10,7 @@ from rasterio.enums import MergeAlg
 from rasterio.plot import show
 import numpy as np
 import fiona
+import os
 from my_lib import normalize, transforms_resize_img, save_tiff, palette0
 
 warnings.filterwarnings("ignore")
@@ -64,9 +65,11 @@ def def_num(it: dict) -> int:
         return translate_classes_simple[it['CT']]
 
 
+ban_list = []
 for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
     code = img_file.split('\\')[1].split('T')[0]
     reg_name, date = code.split('_')
+    bad_img_flag = False
     for f in glob.glob(f'{reg_path}/*{reg_name}*2021{date}*.shp'):
         shapes_list = gpd.read_file(f).to_crs('epsg:4326')
         file = fiona.open(f)
@@ -83,12 +86,14 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
             geom_value.append((geom_, def_num(prop['properties'])))
 
         if len(geom_value) == 0:
+            bad_img_flag = True
             continue
 
         rasterized = features.rasterize(geom_value, out_shape=sat_img.shape, transform=sat_img.transform,
                                         all_touched=True, fill=0, merge_alg=MergeAlg.replace, dtype=np.int16)
 
         if rasterized.sum() == 0:
+            bad_img_flag = True
             continue
 
         if len(np.unique(rasterized)) > 4:
@@ -118,3 +123,9 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
         #     save_tiff(f'E:/files/view/map/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)
         # except:
         #     continue
+    if bad_img_flag:
+        ban_list.append(img_file)
+
+# for file in ban_list:
+#     os.remove(file)
+#     os.remove(file.replace('.tiff', '.npy'))

@@ -12,17 +12,16 @@ from datetime import date, timedelta
 import fiona
 
 warnings.filterwarnings("ignore")
-reg_path = 'C:/files/regions/2021'
-workspace = 'D:/dag_img'
+reg_path = 'E:/files/regions/2021'
+workspace = 'E:/dag_img_2'
 
-setup_logging(verbose=1, no_progress_bar=True)
-# setup_logging(verbose=2, no_progress_bar=False)
+setup_logging(0)
+# setup_logging(verbose=3, no_progress_bar=False)
 os.environ["EODAG__PEPS__AUTH__CREDENTIALS__USERNAME"] = "katarina.spasenovic@omni-energy.it"
 os.environ["EODAG__PEPS__AUTH__CREDENTIALS__PASSWORD"] = "M@rkon!1997"
 
 # os.environ["EODAG__ONDA__AUTH__CREDENTIALS__USERNAME"] = ["t0pcup@yandex.ru", "kdmikhaylova_1@edu.hse.ru"][0]
 # os.environ["EODAG__ONDA__AUTH__CREDENTIALS__PASSWORD"] = ["jL7-iq4-GBM-RPe", "b8k-Jyy-NzS-jZ6"][0]
-dag = EODataAccessGateway()
 
 if not os.path.isdir(workspace):
     os.mkdir(workspace)
@@ -68,10 +67,9 @@ def scroll(pg):
     return lst
 
 
-# TODO: GL, HB, WA, *EA
-for f in glob.glob('C:/files/regions/2021/*.shp'):
-    if 'SGRDREC_' in f:
-        continue
+for f in glob.glob(f'{reg_path}/*A_*.shp')[::-1]:
+    # if 'SGRDREC_' in f:
+    #     continue
     cnt, indexes = 0, verify(f)
     dataset = gpd.read_file(f).to_crs('epsg:4326')
     nm = f.split("\\")[-1][4:].split("T")[0][5:7]
@@ -86,33 +84,33 @@ for f in glob.glob('C:/files/regions/2021/*.shp'):
         "end": f'{dt}T23:59:59',
         "geom": None,
         "items_per_page": 500,
-        "page": 0
     }
 
-    # for item in tqdm(dataset['geometry'].iloc[indexes], desc=desc, ascii=True):
-    #     poly = search_criteria["geom"] = Polygon(item)
-    #     first_page, estimated = dag.search(**search_criteria)
-    #     # time.sleep(2)
-    #     if estimated == 0:
-    #         continue
-    #
-    #     for elt in first_page:
-    #         if {'1SDH', 'EW'} & set(elt.properties["title"].split('_')):  # {'1SDV', 'IW'}
-    #             continue
-    #         try:
-    #             product_path = elt.download(extract=False)
-    #             cnt += 1
-    #         except:
-    #             pass
+    for item in tqdm(dataset['geometry'].iloc[indexes], desc=desc, ascii=True):
+        poly = search_criteria["geom"] = Polygon(item)
+        first_page, estimated = dag.search(**search_criteria)
+        # time.sleep(2)
+        if estimated == 0:
+            continue
+
+        for elt in first_page:
+            # if {'1SDH', 'EW'} & set(elt.properties["title"].split('_')):
+            #     continue
+            if {'1SDV', 'IW'} & set(elt.properties["title"].split('_')):
+                try:
+                    product_path = elt.download(extract=False)
+                    cnt += 1
+                except:
+                    pass
     # print(f'got {cnt} products')
 
-    poly = search_criteria["geom"] = Polygon(unary_union(dataset['geometry'].iloc[indexes]))
-    page, estimated = dag.search(**search_criteria)
-    amt = len(scroll(page))
-
-    # if estimated > 500:
+    # poly = search_criteria["geom"] = Polygon(unary_union(dataset['geometry'].iloc[indexes]))
+    # page, estimated = dag.search(**search_criteria)
+    # amt = len(scroll(page))
+    # print(estimated)
+    # if estimated > 500 and amt == 0:
     #     search_criteria["page"] = 1
     #     page, _ = dag.search(**search_criteria)
     #     amt += len(scroll(page))
-
-    print(amt)
+    # if amt != 0:
+    #     print(amt, end='')

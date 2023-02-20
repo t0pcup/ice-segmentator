@@ -162,12 +162,12 @@ class CrossValDataSet(Dataset):
 
 
 transforms = [
-    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0),
+    albumentations.RandomCrop(320, 320, always_apply=False, p=1.0),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
 ]
 transforms_test = [
-    albumentations.RandomCrop(640, 640, always_apply=False, p=1.0),
+    albumentations.RandomCrop(320, 320, always_apply=False, p=1.0),
     albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
@@ -194,10 +194,10 @@ criterion = nn.CrossEntropyLoss(ignore_index=0)
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([[1, 0.75, 1.25]]))
 # criterion = torchvision.ops.sigmoid_focal_loss
 
-optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.001)
+optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.0015)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
-v = 'weighted_X1'
+v = 'weighted_X1.5'
 model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 15)
 torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_{v}.pth')
 # torch.save(model_ft.state_dict(), f'{path_to_save}/{model_name}_v3.pth')
