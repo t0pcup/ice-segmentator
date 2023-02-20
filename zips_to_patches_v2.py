@@ -19,8 +19,6 @@ reg_path = 'C:/files/regions/2021'
 save_path = 'C:/files/data'
 workspace = 'C:/files/dag_img'
 
-# setup_logging(verbose=1, no_progress_bar=True)
-setup_logging(0)
 zip_paths = glob.glob(f'{workspace}/*1SDV*.zip')
 lz = len(zip_paths)
 if lz == 0:
@@ -44,11 +42,9 @@ for zip_id in trange(len(zip_paths), ascii=True):
     z_dt = zip_paths[zip_id].split('2021')[1].split('_')[0]
     zip_date = '2021' + z_dt.split('T')[0]
     shapes_list = glob.glob(f'{reg_path}/*{zip_date}*.shp')
-    # for f in tqdm(shapes_list, ascii=True, desc=f'date {zip_date[:4]}-{zip_date[4:6]}-{zip_date[6:8]}'):
-    for f in shapes_list:
+    print(zip_paths[zip_id])
+    for f in tqdm(shapes_list, ascii=True, desc=f'date {zip_date[:4]}-{zip_date[4:6]}-{zip_date[6:8]}'):
         dataset = gpd.read_file(f).to_crs('epsg:4326')
-        # dt = f.split('_')[2]
-        # dt = date.fromisoformat(f'{dt[:4]}-{dt[4:6]}-{dt[6:8]}')
 
         poly = Polygon(unary_union(dataset['geometry']))
         inter_area = product_poly.intersection(poly).area
@@ -99,7 +95,6 @@ for zip_id in trange(len(zip_paths), ascii=True):
                         continue
 
                     patch = np_stack[:, y1:y2, x1:x2]
-                    # print(f"PATCH SHAPE: {patch.shape}")
                     if np.sum(np.isnan(patch)) > 20 * chunk_size * 4:
                         # print("ERR_2")
                         continue
