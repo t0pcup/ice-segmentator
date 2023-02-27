@@ -2,7 +2,7 @@ import warnings
 from shapely.geometry import box
 import glob
 import geopandas as gpd
-from tqdm import tqdm
+from tqdm import tqdm, trange
 import matplotlib.pyplot as plt
 import rasterio
 from rasterio import features
@@ -10,13 +10,24 @@ from rasterio.enums import MergeAlg
 from rasterio.plot import show
 import numpy as np
 import fiona
+import shutil
 import os
 from my_lib import normalize, transforms_resize_img, save_tiff, palette0
+from sklearn.model_selection import train_test_split
+
+# X_train, X_val, y_train, y_val = train_test_split(os.listdir('F:/dataset/label'), os.listdir('F:/dataset/data'),
+#                                                   test_size=0.2, random_state=613)
+# for i in trange(len(y_val)):
+#     shutil.move(f'F:/dataset/data/{X_val[i]}', 'F:/dataset/val_data/')
+#     shutil.move(f'F:/dataset/label/{y_val[i]}', 'F:/dataset/val_label/')
+#
+# print(len(X_train)+len(X_val))
+# print(len(y_train)+len(y_val))
 
 warnings.filterwarnings("ignore")
 reg_path = 'E:/files/regions/2021'
 view_path = 'E:/files/view'
-data_path = 'E:/files/data'
+data_path = 'F:/data'
 translate_classes_simple = {
     '55': 1,  # ice free
     '01': 1,  # open water
@@ -66,10 +77,14 @@ def def_num(it: dict) -> int:
 
 
 ban_list = []
-for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
+for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')[::-1]):
     code = img_file.split('\\')[1].split('T')[0]
     reg_name, date = code.split('_')
     bad_img_flag = False
+    np_full_name = img_file.replace('.tiff', '.npy')
+    npy_name = np_full_name.split('\\')[1]
+    if npy_name in os.listdir('E:/files/label'):
+        continue
     for f in glob.glob(f'{reg_path}/*{reg_name}*2021{date}*.shp'):
         shapes_list = gpd.read_file(f).to_crs('epsg:4326')
         file = fiona.open(f)
@@ -102,8 +117,9 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
             plt.gca().invert_yaxis()
             plt.show()
 
-        np_full_name = img_file.replace('.tiff', '.npy')
-        npy_name = np_full_name.split('\\')[1]
+        # shutil.copy(img_file, 'E:/files/data/')
+        shutil.copy(np_full_name, 'E:/files/data/')
+
         np.save(f'E:/files/label/{npy_name}', rasterized)
 
         # profile = sat_img.profile
@@ -123,8 +139,9 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
         #     save_tiff(f'E:/files/view/map/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)
         # except:
         #     continue
-    if bad_img_flag:
-        ban_list.append(img_file)
+
+    # if bad_img_flag:
+    #     ban_list.append(img_file)
 
 # for file in ban_list:
 #     os.remove(file)

@@ -27,7 +27,7 @@ def un_normalize(np_img: np.ndarray):
 
 data_path = r'E:/files'
 palette = np.array([i for i in range(8)])
-model_path = r'E:/files/pts/versions/XXX.pth'
+model_path = r'E:/files/pts/XXX.pth'
 BATCH_SIZE = 1
 
 for file_name in os.listdir(data_path + '/label')[:40]:

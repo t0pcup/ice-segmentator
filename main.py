@@ -13,8 +13,8 @@ from my_lib import *
 
 warnings.filterwarnings('ignore')
 torch.cuda.empty_cache()
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
-print(os.environ["PYTORCH_CUDA_ALLOC_CONF"])
+# os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "maxsplit_size_mb:512"
+# print(os.environ["PYTORCH_CUDA_ALLOC_CONF"])
 
 
 def train_model(model, loader, criterion_, optimizer,
@@ -78,7 +78,6 @@ def train_model(model, loader, criterion_, optimizer,
 
                 l_ = torch.flatten(labels).cpu().detach().numpy()
                 p = torch.flatten(y_pred).cpu().detach().numpy()
-                # writer.add_image(phase + ' | sample predict', y_pred)
 
                 # TODO: get rid of l_ and p, go for labels and y_pred
                 output, target = torch.LongTensor(p.astype(int)), torch.LongTensor(l_.astype(int))
@@ -91,7 +90,6 @@ def train_model(model, loader, criterion_, optimizer,
                 running_pix_b_acc += balanced_accuracy(*st, reduction=red, class_weights=ws) * inputs.size(0)
                 running_pix_acc += accuracy(*st, reduction=red, class_weights=ws) * inputs.size(0)
                 running_pix_f1 += f1_score(*st, reduction=red, class_weights=ws) * inputs.size(0)
-
                 # print(f"micro={mi}\tmacro={ma}\tweighted={wg}\tmicro-imagewise={mii}\tmacro-imagewise={mai}\t")
 
             epo_loss = float(running_loss) / dataset_size[phase]
@@ -168,7 +166,7 @@ transforms = [
 ]
 transforms_test = [
     albumentations.RandomCrop(320, 320, always_apply=False, p=1.0),
-    albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
+    # albumentations.RandomBrightnessContrast(contrast_limit=0.1, brightness_by_max=False),
     albumentations.RandomRotate90(p=0.5),
     albumentations.HorizontalFlip(p=0.5),
 ]
@@ -177,7 +175,7 @@ data_dir = r'E:/files'
 path_to_save = r'E:/files/pts'
 os.makedirs(path_to_save, exist_ok=True)
 model_name = 'NewLbl'
-batch = 16
+batch = 64
 print(device, batch)
 
 dataset = {'train': CrossValDataSet(data_dir, transforms, 5, 1, 'train', True),
@@ -194,10 +192,10 @@ criterion = nn.CrossEntropyLoss(ignore_index=0)
 # criterion = nn.CrossEntropyLoss(weight=torch.Tensor([[1, 0.75, 1.25]]))
 # criterion = torchvision.ops.sigmoid_focal_loss
 
-optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.0015)
+optimizer_ft = optim.Adam(model_ft.parameters(), lr=0.0005)
 # optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.01, momentum=0.7, nesterov=True)
 
-v = 'weighted_X1.5'
-model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 15)
+v = 'no_brightness_crop320_w_X0.5'
+model_ft, iou = train_model(model_ft, dataloader, criterion, optimizer_ft, path_to_save, model_name, sizes, 100, True)
 torch.save({'model_state_dict': model_ft.state_dict()}, f'{path_to_save}/{model_name}_{v}.pth')
 # torch.save(model_ft.state_dict(), f'{path_to_save}/{model_name}_v3.pth')
