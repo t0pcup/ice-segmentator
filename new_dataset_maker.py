@@ -12,8 +12,8 @@ from datetime import date, timedelta
 import fiona
 
 warnings.filterwarnings("ignore")
-reg_path = 'E:/files/regions/2021'
-workspace = 'E:/dag_img_2'
+reg_path = 'C:/files/regions/2022'
+workspace = 'C:/files/dag_img_2'
 
 setup_logging(0)
 # setup_logging(verbose=3, no_progress_bar=False)
@@ -67,7 +67,7 @@ def scroll(pg):
     return lst
 
 
-for f in glob.glob(f'{reg_path}/*A_*.shp')[::-1]:
+for f in glob.glob(f'{reg_path}/*.shp')[::-1]:
     # if 'SGRDREC_' in f:
     #     continue
     cnt, indexes = 0, verify(f)
@@ -94,9 +94,9 @@ for f in glob.glob(f'{reg_path}/*A_*.shp')[::-1]:
             continue
 
         for elt in first_page:
-            # if {'1SDH', 'EW'} & set(elt.properties["title"].split('_')):
-            #     continue
-            if {'1SDV', 'IW'} & set(elt.properties["title"].split('_')):
+            if {'1SDH', 'EW'} & set(elt.properties["title"].split('_')):
+                continue
+            if True:  # {'1SDV', 'IW'} & set(elt.properties["title"].split('_')):
                 try:
                     product_path = elt.download(extract=False)
                     cnt += 1

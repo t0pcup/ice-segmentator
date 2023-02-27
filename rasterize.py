@@ -96,7 +96,7 @@ rasterized = features.rasterize(geom_value,
                                 out_shape=raster.shape,
                                 transform=raster.transform,
                                 all_touched=True,
-                                fill=99,  # background value "Undetermined/Unknown"
+                                fill=0,  # background value "Undetermined/Unknown"
                                 merge_alg=MergeAlg.replace,
                                 dtype=np.int16)
 print(rasterized.shape)

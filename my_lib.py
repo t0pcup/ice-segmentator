@@ -8,7 +8,8 @@ import rasterio.warp
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 fin_res = 128  # 128
-transforms_val = albumentations.Compose([albumentations.CenterCrop(fin_res, fin_res, p=1.0, always_apply=False)])
+transforms_val = albumentations.Compose([albumentations.CenterCrop(320, 320, p=1.0, always_apply=False),
+                                         albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=0)])
 transforms_resize_img = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=3)])
 transforms_resize_lbl = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=0)])
 
@@ -55,15 +56,16 @@ def coll_fn(batch_):
     return torch.stack(ims_, 0).type(torch.FloatTensor), torch.stack(labels_, 0).type(torch.LongTensor)
 
 
-def item_getter(path: str, file_name: str, transforms=transforms_val) -> (np.ndarray, np.ndarray):
-    image = normalize(np.load(f'{path}/data/{file_name}'))
-    label = np.load(f'{path}/label/{file_name}')
+def item_getter(path: str, file_name: str, transforms=transforms_val, val=False) -> (np.ndarray, np.ndarray):
+    i_ = 'val_' if val else ''
+    image = normalize(np.load(f'{path}/{i_}data/{file_name}'))
+    label = np.load(f'{path}/{i_}label/{file_name}')
 
     img = image.transpose((1, 2, 0))
     augmented = transforms(image=img, mask=label[:, :])
     image = transforms_resize_img(image=augmented['image'], mask=augmented['mask'])['image']
     label = transforms_resize_lbl(image=augmented['image'], mask=augmented['mask'])['mask']
-    image = image.transpose(2, 0, 1)
+    image = image.transpose((2, 0, 1))
 
     assert not np.any(np.isnan(image))
     assert not np.any(np.isnan(label))

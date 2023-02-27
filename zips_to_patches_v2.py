@@ -124,4 +124,3 @@ for zip_id in trange(len(zip_paths), ascii=True):
                     pass
 
     os.remove(full_path)
-# TODO: убрать дубликаты

@@ -14,13 +14,13 @@ import os
 from my_lib import normalize, transforms_resize_img, save_tiff, palette0
 
 warnings.filterwarnings("ignore")
-reg_path = 'E:/files/regions/2021'
-view_path = 'E:/files/view'
-data_path = 'E:/files/data'
+reg_path = 'C:/files/regions/2021'
+# view_path = 'E:/files/view'
+data_path = 'D:/data'
 translate_classes_simple = {
     '55': 1,  # ice free
-    '01': 1,  # open water
-    '02': 1,  # bergy water
+    '01': 8,  # open water
+    '02': 9,  # bergy water
 
     '10': 2,  # 1/10
     '12': 2,  # 1-2/10
@@ -28,30 +28,28 @@ translate_classes_simple = {
     '20': 2,  # 2/10
     '23': 2,  # 2-3/10
     '24': 2,  # 2-4/10
+    '30': 2,  # 3/10
+    '34': 2,  # 3-4/10
+    '35': 2,  # 3-5/10
+    '40': 2,  # 4/10
+    '45': 2,  # 4-5/10
+    '46': 2,  # 4-6/10
 
-    '30': 3,  # 3/10
-    '34': 3,  # 3-4/10
-    '35': 3,  # 3-5/10
-    '40': 3,  # 4/10
-    '45': 3,  # 4-5/10
-    '46': 3,  # 4-6/10
+    '50': 3,  # 5/10
+    '56': 3,  # 5-6/10
+    '57': 3,  # 5-7/10
+    '60': 3,  # 6/10
+    '67': 3,  # 6-7/10
+    '68': 3,  # 6-8/10
+    '70': 3,  # 7/10
+    '78': 3,  # 7-8/10
+    '79': 3,  # 7-9/10
+    '80': 3,  # 8/10
+    '89': 3,  # 8-9/10
+    '81': 3,  # 8-10/10
 
-    '50': 4,  # 5/10
-    '56': 4,  # 5-6/10
-    '57': 4,  # 5-7/10
-    '60': 4,  # 6/10
-    '67': 4,  # 6-7/10
-    '68': 4,  # 6-8/10
-
-    '70': 5,  # 7/10
-    '78': 5,  # 7-8/10
-    '79': 5,  # 7-9/10
-    '80': 5,  # 8/10
-    '89': 5,  # 8-9/10
-    '81': 5,  # 8-10/10
-
-    '90': 6,  # 9/10
-    '91': 6,  # 9-10/10
+    '90': 4,  # 9/10
+    '91': 5,  # 9-10/10
     '92': 6,  # 10/10
 }
 
@@ -92,7 +90,10 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
         rasterized = features.rasterize(geom_value, out_shape=sat_img.shape, transform=sat_img.transform,
                                         all_touched=True, fill=0, merge_alg=MergeAlg.replace, dtype=np.int16)
 
-        if rasterized.sum() == 0:
+        # if rasterized.sum() == 0:
+        #     bad_img_flag = True
+        #     continue
+        if (rasterized == 0).all():  # or (rasterized == 1).all() or (rasterized == 6).all()
             bad_img_flag = True
             continue
 
@@ -104,7 +105,7 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
 
         np_full_name = img_file.replace('.tiff', '.npy')
         npy_name = np_full_name.split('\\')[1]
-        np.save(f'E:/files/label/{npy_name}', rasterized)
+        np.save(f'D:/dataset_new/label4/{npy_name}', rasterized)
 
         # profile = sat_img.profile
         # profile['count'] = 3
