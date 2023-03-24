@@ -11,12 +11,12 @@ import time
 from datetime import date, timedelta
 import fiona
 
-warnings.filterwarnings("ignore")
-reg_path = 'C:/files/regions/2022'
+# warnings.filterwarnings("ignore")
+reg_path = 'C:/files/regions/2020'
 workspace = 'C:/files/dag_img_2'
 
-setup_logging(0)
-# setup_logging(verbose=3, no_progress_bar=False)
+# setup_logging(0)
+setup_logging(verbose=3, no_progress_bar=False)
 os.environ["EODAG__PEPS__AUTH__CREDENTIALS__USERNAME"] = "katarina.spasenovic@omni-energy.it"
 os.environ["EODAG__PEPS__AUTH__CREDENTIALS__PASSWORD"] = "M@rkon!1997"
 
@@ -44,33 +44,46 @@ dag.set_preferred_provider("peps")
 def verify(file: str):
     schema_dataset = fiona.open(file)
     # get water, ice, shelf; ignore land and no data: ['L', 'N']
-    lst, idx = ['W', 'I', 'S'], []
+    # lst, idx = ['W', 'I', 'S'], []
+    lst = [10, 12, 13,
+           20, 23, 24,
+           30, 34, 35,
+           40, 45, 46,
+           50, 56, 57,
+           60, 67, 68,
+           70, 78, 79,
+           80, 89, 81]
+    lst = list(map(str, lst))
+    idx = []
     my_ind = -1
     for obj in schema_dataset:
         my_ind += 1
-        if obj['properties']['POLY_TYPE'] in lst:
+        # if obj['properties']['POLY_TYPE'] in lst:
+        if obj['properties']['CT'] in lst:
             idx.append(my_ind)
     return idx
 
 
 def scroll(pg):
     lst = []
-    for elt in pg:
+    for el in pg:
         # if {'1SDH', 'EW'} & set(elt.properties["title"].split('_')):
         #     continue
-        if {'1SDV', 'IW'} & set(elt.properties["title"].split('_')):
+        if {'1SDV', 'IW'} & set(el.properties["title"].split('_')):
             try:
-                product_path = elt.download(extract=False)
-                lst.append(product_path)
+                product_path_ = el.download(extract=False)
+                lst.append(product_path_)
             except:
                 pass
     return lst
 
 
-for f in glob.glob(f'{reg_path}/*.shp')[::-1]:
-    # if 'SGRDREC_' in f:
-    #     continue
+skip = 0
+for f in glob.glob(f'{reg_path}/*.shp'):
     cnt, indexes = 0, verify(f)
+    if len(indexes) == 0:
+        skip += 1
+        continue
     dataset = gpd.read_file(f).to_crs('epsg:4326')
     nm = f.split("\\")[-1][4:].split("T")[0][5:7]
     dt = f.split('_')[2]
@@ -87,9 +100,9 @@ for f in glob.glob(f'{reg_path}/*.shp')[::-1]:
     }
 
     for item in tqdm(dataset['geometry'].iloc[indexes], desc=desc, ascii=True):
+        # poly = search_criteria["geom"] = Polygon(item).simplify(0.2, preserve_topology=False)
         poly = search_criteria["geom"] = Polygon(item)
         first_page, estimated = dag.search(**search_criteria)
-        # time.sleep(2)
         if estimated == 0:
             continue
 
@@ -99,7 +112,7 @@ for f in glob.glob(f'{reg_path}/*.shp')[::-1]:
             if True:  # {'1SDV', 'IW'} & set(elt.properties["title"].split('_')):
                 try:
                     product_path = elt.download(extract=False)
-                    cnt += 1
+                    # cnt += 1
                 except:
                     pass
     # print(f'got {cnt} products')
@@ -114,3 +127,5 @@ for f in glob.glob(f'{reg_path}/*.shp')[::-1]:
     #     amt += len(scroll(page))
     # if amt != 0:
     #     print(amt, end='')
+
+print(f"skipped: {skip}")

@@ -7,28 +7,61 @@ from torch.nn import functional
 import rasterio.warp
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-fin_res = 128  # 128
-transforms_val = albumentations.Compose([albumentations.CenterCrop(320, 320, p=1.0, always_apply=False),
-                                         albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=0)])
+fin_res = 256  # 128
+transforms_val = albumentations.Compose([
+    albumentations.CenterCrop(fin_res, fin_res, p=1.0, always_apply=False),
+    # albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=0)
+])
 transforms_resize_img = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=3)])
 transforms_resize_lbl = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=0)])
 
-model_ft = smp.DeepLabV3(
-    encoder_name="timm-mobilenetv3_small_minimal_100",  # efficientnet-b0
-    encoder_weights=None,
+# model_ft = smp.DeepLabV3(
+#     encoder_name="timm-mobilenetv3_small_075",
+#     # encoder_name="efficientnet-b0",
+#     encoder_weights=None,
+#     in_channels=4,
+#     classes=5,
+# ).to(device)
+
+model_ft = smp.Unet(
+    encoder_name="resnet18",
+    encoder_weights='imagenet',
     in_channels=4,
-    classes=8,
+    classes=5,
 ).to(device)
 
+
 classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']  # other = undefined / land / no data
-palette0 = np.array([[0, 0, 0],  # other
-                     [32, 32, 255],  # <1
-                     [64, 64, 255],  # 1-3
-                     [128, 128, 255],  # 3-5
-                     [255, 255, 128],  # 5-7
-                     [255, 128, 64],  # 7-9
-                     [255, 64, 64],  # 9-10
-                     [255, 255, 255]])  # fast_ice
+# palette0 = np.array([[0, 0, 0],  # 0
+#                      [32, 32, 255],  # 1
+#                      [64, 64, 255],  # 2
+#                      [128, 128, 255],  # 3
+#
+#                      [128, 255, 128],  # 4
+#                      [255, 255, 32],  # 5
+#
+#                      [255, 255, 64],  # 6
+#                      [255, 128, 64],  # 7
+#                      [255, 64, 64],  # 8
+#                      [255, 0, 255]])  # _
+#
+# palette0 = {
+#     '0': [0, 0, 0],
+#     '1': [0, 0, 255],
+#     '2': [0, 255, 0],
+#     '3': [255, 255, 0],
+#     '4': [255, 0, 0],
+#     '5': [255, 255, 255],
+# }
+
+palette0 = np.array([
+    [0, 0, 0],
+    [0, 0, 255],
+    [0, 255, 0],
+    [255, 255, 0],
+    [255, 0, 0],
+    [255, 255, 255],
+])  # TODO
 
 
 def save_tiff(full_name, im, profile):
@@ -38,10 +71,18 @@ def save_tiff(full_name, im, profile):
 
 def normalize(im: np.ndarray) -> np.ndarray:
     im = np.nan_to_num(im)
-    mean, std = np.zeros(im.shape[0]), np.zeros(im.shape[0])
-    for channel in range(im.shape[0]):
-        mean[channel] = np.mean(im[channel, :, :])
-        std[channel] = np.std(im[channel, :, :])
+    # mean, std = np.zeros(im.shape[0]), np.zeros(im.shape[0])
+    # for channel in range(im.shape[0]):
+    #     mean[channel] = np.mean(im[channel, :, :])
+    #     std[channel] = np.std(im[channel, :, :])
+
+    mean = np.array([-16.388807, -16.38885, -30.692194, -30.692194])
+    std = np.array([5.6070476, 5.6069245, 8.395209, 8.395208])
+    mean[1], mean[3] = np.mean(im[1, :, :]), np.mean(im[3, :, :])
+    std[1], std[3] = np.std(im[1, :, :]), np.std(im[3, :, :])
+    # TODO try to change channels
+    # mean[0], mean[2] = np.mean(im[0, :, :]), np.mean(im[2, :, :])
+    # std[0], std[2] = np.std(im[0, :, :]), np.std(im[2, :, :])
 
     norm = torchvision.transforms.Normalize(mean, std)
     return np.asarray(norm.forward(torch.from_numpy(im)))
@@ -58,8 +99,9 @@ def coll_fn(batch_):
 
 def item_getter(path: str, file_name: str, transforms=transforms_val, val=False) -> (np.ndarray, np.ndarray):
     i_ = 'val_' if val else ''
-    image = normalize(np.load(f'{path}/{i_}data/{file_name}'))
-    label = np.load(f'{path}/{i_}label/{file_name}')
+    image = np.load(f'{path}/{i_}data10-2/{file_name}')
+    # image = normalize(np.load(f'{path}/{i_}data10-2/{file_name}'))
+    label = np.load(f'{path}/{i_}label10-2_ignore=-1_0/{file_name}')
 
     img = image.transpose((1, 2, 0))
     augmented = transforms(image=img, mask=label[:, :])

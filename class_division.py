@@ -17,54 +17,120 @@ warnings.filterwarnings("ignore")
 reg_path = 'C:/files/regions/2021'
 # view_path = 'E:/files/view'
 data_path = 'D:/data'
-translate_classes_simple = {
-    '55': 1,  # ice free
-    '01': 8,  # open water
-    '02': 9,  # bergy water
+translate_classes = {
+    '55': 4,  # ice free
+    '01': 5,  # open water
+    '02': 6,  # bergy water
 
-    '10': 2,  # 1/10
-    '12': 2,  # 1-2/10
-    '13': 2,  # 1-3/10
-    '20': 2,  # 2/10
+    '10': 7,  # 1/10
+    '12': 8,  # 1-2/10
+    '13': 9,  # 1-3/10
+
+    '20': 10,  # 2/10
+    '23': 11,  # 2-3/10
+    '24': 12,  # 2-4/10
+
+    '30': 13,  # 3/10
+    '34': 14,  # 3-4/10
+    '35': 15,  # 3-5/10
+
+    '40': 16,  # 4/10
+    '45': 17,  # 4-5/10
+    '46': 18,  # 4-6/10
+
+    '50': 19,  # 5/10
+    '56': 20,  # 5-6/10
+    '57': 21,  # 5-7/10
+
+    '60': 22,  # 6/10
+    '67': 23,  # 6-7/10
+    '68': 24,  # 6-8/10
+
+    '70': 25,  # 7/10
+    '78': 26,  # 7-8/10
+    '79': 27,  # 7-9/10
+
+    '80': 28,  # 8/10
+    '89': 29,  # 8-9/10
+    '81': 30,  # 8-10/10
+
+    '90': 31,  # 9/10
+    '91': 32,  # 9-10/10
+    '92': 33,  # 10/10
+}
+
+translate_classes_simple = {
+    '55': 0,  # ice free
+    '01': 0,  # open water
+
+    '02': 1,  # bergy water | FA 10 | icebergs
+
+    '10': 0,  # 1/10 | noname FA
+    '12': 0,  # 1-2/10
+    '13': 0,  # 1-3/10
+
+    '20': 2,  # 2/10 | FA 03-05
     '23': 2,  # 2-3/10
     '24': 2,  # 2-4/10
-    '30': 2,  # 3/10
+    '30': 2,  # 3/10 | FA 03-05
     '34': 2,  # 3-4/10
     '35': 2,  # 3-5/10
-    '40': 2,  # 4/10
+    '40': 2,  # 4/10 | ???
     '45': 2,  # 4-5/10
     '46': 2,  # 4-6/10
+    # ++++++++++++++
+    '50': 2,  # 5/10 | FA 03-05
+    '56': 2,  # 5-6/10
+    '57': 2,  # 5-7/10
+    '60': 2,  # 6/10 | ???
+    '67': 2,  # 6-7/10
+    '68': 2,  # 6-8/10
 
-    '50': 3,  # 5/10
-    '56': 3,  # 5-6/10
-    '57': 3,  # 5-7/10
-    '60': 3,  # 6/10
-    '67': 3,  # 6-7/10
-    '68': 3,  # 6-8/10
-    '70': 3,  # 7/10
+    '70': 3,  # 7/10 | FA 03-07
     '78': 3,  # 7-8/10
     '79': 3,  # 7-9/10
-    '80': 3,  # 8/10
+    '80': 3,  # 8/10 | FA 03-05
     '89': 3,  # 8-9/10
     '81': 3,  # 8-10/10
+    '90': 3,  # 9/10 | FA 03-06
 
-    '90': 4,  # 9/10
-    '91': 5,  # 9-10/10
-    '92': 6,  # 10/10
+    '91': 4,  # 9-10/10 | FA 03-08 TODO
+    '92': 4,  # 10/10 | FA 03-08 TODO
 }
+
+codes = []
+dic = dict(zip(translate_classes_simple.keys(), [[] for _ in translate_classes_simple.keys()]))
 
 
 def def_num(it: dict) -> int:
     # undefined / land / no data => zero
-    trans_dict = {'L': 0, 'W': 1, 'N': 0, 'S': 7}
+    trans_dict = {'L': 0, 'W': 1, 'N': 0, 'S': 4}  # no shelves in src
+    try:
+        ct, fa = int(it['CT']), int(it['FA'])
+        CT_FA_stat.append(it['CT'] + '_' + it['FA'])
+    except:
+        _ = 0
     try:
         return trans_dict[it['POLY_TYPE']]
     except:
-        return translate_classes_simple[it['CT']]
+        if it['FA'] == '10':
+            return 1
+        if it['FA'] in ['01', '02', '03', '04']:
+            # if it['CT'] in ['90', '91', '92']:
+            #     return 3 !@#$%^&
+            return 2
+        if it['FA'] in ['05', '06', '07']:
+            return 3
+        if it['FA'] == '08':
+            return 4
+        if it['FA'] in ['99', '-9']:
+            return 0
+        print(it['POLY_TYPE'], it['CT'], it['FA'])
 
 
-ban_list = []
-for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
+CT_FA_stat = []
+l_ = list(np.random.permutation(glob.glob(f'{data_path}/*.tiff')))
+for img_file in tqdm(l_):
     code = img_file.split('\\')[1].split('T')[0]
     reg_name, date = code.split('_')
     bad_img_flag = False
@@ -91,13 +157,22 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
                                         all_touched=True, fill=0, merge_alg=MergeAlg.replace, dtype=np.int16)
 
         # if rasterized.sum() == 0:
-        #     bad_img_flag = True
-        #     continue
-        if (rasterized == 0).all():  # or (rasterized == 1).all() or (rasterized == 6).all()
+        # if (rasterized == 0).all() or (rasterized == 1).all():  # or (rasterized == 6).all()
+        d = dict((k, 0) for k in range(6))
+        a = np.unique(rasterized, return_counts=True)
+        assert not np.any(np.isnan(a))
+        for i in range(len(a[0])):
+            try:
+                d[int(a[0][i])] += a[1][i]
+            except:
+                continue
+
+        full = 1280 * 1280
+        if d[0] == full:
             bad_img_flag = True
             continue
 
-        if len(np.unique(rasterized)) > 4:
+        if len(np.unique(rasterized)) > 3:
             fig, ax = plt.subplots(1, figsize=(10, 10))
             show(rasterized, ax=ax)
             plt.gca().invert_yaxis()
@@ -105,7 +180,10 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
 
         np_full_name = img_file.replace('.tiff', '.npy')
         npy_name = np_full_name.split('\\')[1]
-        np.save(f'D:/dataset_new/label4/{npy_name}', rasterized)
+        np.save(f'D:/dataset_new/label10-3/{npy_name}', rasterized)
+
+        # print(*codes)
+        codes = []
 
         # profile = sat_img.profile
         # profile['count'] = 3
@@ -124,9 +202,6 @@ for img_file in tqdm(glob.glob(f'{data_path}/*.tiff')):
         #     save_tiff(f'E:/files/view/map/{npy_name.replace(".npy", "")}.tiff', im_dst, profile)
         # except:
         #     continue
-    if bad_img_flag:
-        ban_list.append(img_file)
 
-# for file in ban_list:
-#     os.remove(file)
-#     os.remove(file.replace('.tiff', '.npy'))
+print(np.unique(np.asarray(CT_FA_stat), return_counts=True))
+print(dic)

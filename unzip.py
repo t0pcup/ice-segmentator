@@ -3,8 +3,8 @@ import os
 from tqdm import tqdm
 
 
-reg_path = 'E:/files/regions/2022'
-# reg_path = 'C:/files/regions/2021'
+# reg_path = 'E:/files/regions/2022'
+reg_path = 'C:/files/regions/2020'
 
 """tar unpacking"""
 for region in os.listdir(reg_path):
