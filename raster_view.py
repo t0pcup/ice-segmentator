@@ -67,44 +67,16 @@ def stand(im_: np.ndarray, single_stand=False) -> np.ndarray:
     return im_
 
 
-num = '10-2'
-patches = np.random.permutation(glob.glob(f'{data_path}/dataset_new/label{num}/*.npy'))
-# for img in tqdm(patches):
-#     # # fig = plt.figure(dpi=250)
-#     # cols, rows = 2, 1
-#     # for i in range(1, cols*rows+1):
-#     #     r = np.load(img.replace('/clear_labels', f'/clear_data_{i}'))[:3].transpose((1, 2, 0))
-#     #     im = Image.fromarray(r.astype(np.uint8))
-#     #     name = img.split('/clear_labels\\')[1].split('.npy')[0]
-#     #     im.save(f"D:/dataset_new/clear_i{i}/{name}.gif")
-#     #     # fig.add_subplot(rows, cols, i)
-#     #     # plt.imshow(im)
-#     # # plt.show()
-#
-#     # im = np.load(img.replace('/dataset_new/label9', '/data')).transpose((1, 2, 0))
-#     # im = transforms_resize_img(image=im)['image'].transpose(2, 0, 1)
-#     # np.save(img.replace('/label9', '/data9'), normalize(im))
-#
-#     im = new_normalize(np.load(img.replace(f'/dataset_new/label{num}', '/data')), plural=True)
-#     im = stand(im, single_stand=True).transpose((1, 2, 0))
-#     im = transforms_resize_img(image=im)['image'].transpose(2, 0, 1)
-#     np.save(img.replace(f'/label{num}', f'/data{num}'), im)
-#
-#     r = np.load(img.replace(f'/label{num}', f'/data{num}'))[:3]
-#     r = (r * 255).transpose((1, 2, 0))
-#     im = Image.fromarray(r.astype(np.uint8))
-#     name = img.split(f'/label{num}\\')[1].split('.npy')[0]
-#     im.save(f"D:/dataset_new/data{num}_1/{name}.gif")
-#     # im.show()
-
+num = '10-5'
+patches = np.random.permutation(glob.glob(f'{data_path}/dataset_new/label{num}/*.npy'))  # [:20]
 pal = {
-    '0': [0, 0, 0],
-    '1': [0, 0, 255],
-    '2': [0, 255, 0],
-
-    '3': [255, 255, 0],
-    '4': [255, 0, 0],
-    '5': [255, 255, 255],
+    '0': [0, 0, 0],  # ignore
+    '1': [0, 0, 255],  # водичка и low ct
+    '5': [255, 255, 0],  # med ct
+    '2': [255, 128, 0],  # ct >= 70%
+    '3': [255, 0, 0],  # fast ice
+    '4': [32, 128, 0],  # land
+    # '5': [255, 255, 255],
 
     # '3': [128, 255, 128],
     # '4': [255, 255, 0],
@@ -158,68 +130,64 @@ pal = {
 #     '33': [240, 108, 152],  # 10
 # }
 ban = []
-d = dict((str(k), 0) for k in [-1, 0, 1, 2, 3])
+d = dict((str(1 + k), 0) for k in [-1, 0, 1, 2, 3, 4])
 arr = np.zeros(dtype=int, shape=(256, 256, 3))
-special = '_ignore=-1'
+"""special = '_ignore=-1'"""
+special = ''
 got_em = glob.glob(f'{data_path}/dataset_new/label{num}/*.npy'.replace(f'/label{num}', f'/label{num}{special}_0'))
 # p = [n for n in patches if n.replace(f'/label{num}', f'/label{num}{special}_0') not in got_em]
-for lbl in tqdm(patches):
-    l_ = np.load(lbl) - 1  # TODO sub 1 for stats ignore index
-    x = transforms_resize_lbl(image=l_, mask=l_)['mask']
-    name = lbl.split(f'/label{num}\\')[1].split('.npy')[0]
-    for i in range(x.shape[0]):
-        for j in range(x.shape[1]):
-            arr[i, j] = pal[str(x[i, j] + 1)]
-
-    # Image.fromarray(np.uint8(arr)).save(f"D:/dataset_new/label{num}{special}_1/{name}.gif")
-    # np.save(lbl.replace(f'/label{num}', f'/label{num}{special}_0'), x)
-
-    a = np.unique(x, return_counts=True)
-    # a = np.unique(np.load(lbl), return_counts=True)
-    for i in range(len(a[0])):
-        try:
-            # if str(a[0][i]) == '0' and a[1][i] == 256 * 256:
-            #     ban.append(lbl)
-            #     continue
-            d[str(a[0][i])] += a[1][i]
-        except:
-            continue
-
-print(d)
-plt.pie(d.values(), labels=d.keys())
-plt.axis('equal')
-plt.title(f'{num} | all regions, amt of patches: {len(patches)}')
-plt.show()
-
-del d['-1']
-plt.pie(list(d.values()), labels=list(d.keys()))
-plt.axis('equal')
-plt.title(f'{num} | drop ignore_index')
-plt.show()
-print(ban)
-
-# del d['4']  # ice free, open/bergy water
-# del d['5']
-# del d['6']
+full = 256 * 256
+# for lbl in tqdm(patches):
+#     l_ = np.load(lbl)  # - 1  # TODO sub 1 for stats ignore index
+#     x = transforms_resize_lbl(image=l_, mask=l_)['mask']
+#     name = lbl.split(f'/label{num}\\')[1].split('.npy')[0]
+#     for i in range(x.shape[0]):
+#         for j in range(x.shape[1]):
+#             arr[i, j] = pal[str(x[i, j])]
 #
+#     a = np.unique(x, return_counts=True)
+#     for i in range(len(a[0])):
+#         try:
+#             if str(a[0][i]) in ['4'] and a[1][i] >= full * 0.9:  # and 3 not in np.unique(x)
+#                 ban.append(lbl)
+#                 continue
+#             d[str(a[0][i])] += a[1][i]
+#         except:
+#             continue
+#     if lbl not in ban:
+#         x[x == 0] = -1
+#         x[x == 1] = 0
+#         x[x == 5] = 1
+#         # Image.fromarray(np.uint8(arr)).save(f"D:/dataset_new/label{num}{special}_1/{name}.gif")
+#         np.save(lbl.replace(f'/label{num}', f'/label{num}{special}_0'), x)
+#
+# print(d)
+# plt.pie(d.values(), labels=d.keys())
+# plt.axis('equal')
+# plt.title(f'{num} | all regions, amt of patches: {len(patches)}')
+# plt.show()
+#
+# del d['0']
 # plt.pie(list(d.values()), labels=list(d.keys()))
 # plt.axis('equal')
-# plt.title(f'drop None, Land, Water, Shelf + ice free, open/bergy water')
+# plt.title(f'{num} | drop ignore_index')
 # plt.show()
-#
-# del d['31']  # 9-10
-# del d['32']
-# del d['33']
-#
-# plt.pie(list(d.values()), labels=list(d.keys()))
-# plt.axis('equal')
-# plt.title(f'drop None, Land, Water, Shelf + ice free, open/bergy water + CT 9..10')
-# plt.show()
-#
-# dn = {k: v for k, v in d.items() if v != 0}
-# # plt.bar(dn.keys(), dn.values())
-# # plt.show()
-# plt.pie(list(dn.values()), labels=list(dn.keys()))
-# plt.axis('equal')
-# plt.title(f'non-zero rest')
-# plt.show()
+# print(ban)
+
+im_patches = glob.glob(f'{data_path}/dataset_new/label{num}_1/*.gif')
+for img in tqdm(im_patches):
+    # im = new_normalize(np.load(img.replace(f'/dataset_new/label{num}', '/data')), plural=True).transpose((1, 2, 0))
+    # im = transforms_resize_img(image=im)['image'].transpose(2, 0, 1)
+    # im = stand(im, single_stand=True)
+    im = np.load(img.replace(f'/dataset_new/label{num}_1', '/data').replace('.gif', '.npy')).transpose((1, 2, 0))
+    im = transforms_resize_img(image=im)['image'].transpose(2, 0, 1)
+    im = new_normalize(im, plural=True)
+    im = stand(im, single_stand=True)
+    np.save(img.replace(f'/label{num}_1', f'/data{num}').replace('.gif', '.npy'), im)
+
+    r = np.load(img.replace(f'/label{num}_1', f'/data{num}').replace('.gif', '.npy'))[:3]
+    r = (r * 255).transpose((1, 2, 0))
+    im = Image.fromarray(r.astype(np.uint8))
+    name = img.split(f'/label{num}_1\\')[1].split('.gif')[0]
+    im.save(f"D:/dataset_new/data{num}_1/{name}.gif")
+    # im.show()

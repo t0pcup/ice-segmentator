@@ -17,7 +17,8 @@ import sys
 warnings.filterwarnings("ignore")
 reg_path = 'C:/files/regions/2021'
 save_path = 'C:/files/data'
-workspace = 'C:/files/dag_img'
+workspace = 'D:/dag_img'
+[<SarBandNames.VV: 'VV'>, <SarBandNames.VV_DSPK: 'VV_DSPK'>, <SarBandNames.VH: 'VH'>, <SarBandNames.VH_DSPK: 'VH_DSPK'>]
 
 zip_paths = glob.glob(f'{workspace}/*1SDV*.zip')
 lz = len(zip_paths)
@@ -55,6 +56,7 @@ for zip_id in trange(len(zip_paths), ascii=True):
         ok_bands = [band for band in bands if product.has_band(band)]
         if len(ok_bands) != 4:
             continue
+        print(ok_bands)
 
         stack = product.stack(ok_bands)
         np_stack = stack.to_numpy()

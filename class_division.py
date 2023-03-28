@@ -104,7 +104,7 @@ dic = dict(zip(translate_classes_simple.keys(), [[] for _ in translate_classes_s
 
 def def_num(it: dict) -> int:
     # undefined / land / no data => zero
-    trans_dict = {'L': 0, 'W': 1, 'N': 0, 'S': 4}  # no shelves in src
+    trans_dict = {'L': 4, 'W': 1, 'N': 0, 'S': 3}  # no shelves in src
     try:
         ct, fa = int(it['CT']), int(it['FA'])
         CT_FA_stat.append(it['CT'] + '_' + it['FA'])
@@ -113,23 +113,25 @@ def def_num(it: dict) -> int:
     try:
         return trans_dict[it['POLY_TYPE']]
     except:
+        if it['FA'] == '08':
+            return 3
+        if it['CT'] in ['55', '01', '02']:
+            return 1
         if it['FA'] == '10':
             return 1
-        if it['FA'] in ['01', '02', '03', '04']:
-            # if it['CT'] in ['90', '91', '92']:
-            #     return 3 !@#$%^&
+        if it['CT'] in ['10', '20', '30', '12', '13', '23', '24', '34', '35', '40', '45', '46',
+                        '50', '56', '57', '60', '67', '68', '70', '78', '79']:
+            return 5
+        if it['CT'] in ['80', '89', '81', '90', '91', '92']:
             return 2
-        if it['FA'] in ['05', '06', '07']:
-            return 3
-        if it['FA'] == '08':
-            return 4
-        if it['FA'] in ['99', '-9']:
-            return 0
+
+        print(it['FA'], it['CT'])
+        # return 2
         print(it['POLY_TYPE'], it['CT'], it['FA'])
 
 
 CT_FA_stat = []
-l_ = list(np.random.permutation(glob.glob(f'{data_path}/*.tiff')))
+l_ = list(np.random.permutation(glob.glob(f'{data_path}/*.tiff')))[::-1]
 for img_file in tqdm(l_):
     code = img_file.split('\\')[1].split('T')[0]
     reg_name, date = code.split('_')
@@ -168,7 +170,7 @@ for img_file in tqdm(l_):
                 continue
 
         full = 1280 * 1280
-        if d[0] == full:
+        if d[0] + d[4] >= full or d[0] + d[1] >= full:
             bad_img_flag = True
             continue
 
@@ -180,7 +182,7 @@ for img_file in tqdm(l_):
 
         np_full_name = img_file.replace('.tiff', '.npy')
         npy_name = np_full_name.split('\\')[1]
-        np.save(f'D:/dataset_new/label10-3/{npy_name}', rasterized)
+        np.save(f'D:/dataset_new/label10-5/{npy_name}', rasterized)
 
         # print(*codes)
         codes = []

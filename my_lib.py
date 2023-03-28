@@ -15,20 +15,20 @@ transforms_val = albumentations.Compose([
 transforms_resize_img = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=3)])
 transforms_resize_lbl = albumentations.Compose([albumentations.Resize(fin_res, fin_res, p=1.0, interpolation=0)])
 
-# model_ft = smp.DeepLabV3(
-#     encoder_name="timm-mobilenetv3_small_075",
-#     # encoder_name="efficientnet-b0",
-#     encoder_weights=None,
+model_ft = smp.DeepLabV3(
+    encoder_name="timm-mobilenetv3_small_075",
+    # encoder_name="efficientnet-b0",
+    encoder_weights=None,
+    in_channels=4,
+    classes=6,
+).to(device)
+
+# model_ft = smp.Unet(
+#     encoder_name="resnet18",
+#     encoder_weights='imagenet',
 #     in_channels=4,
 #     classes=5,
 # ).to(device)
-
-model_ft = smp.Unet(
-    encoder_name="resnet18",
-    encoder_weights='imagenet',
-    in_channels=4,
-    classes=5,
-).to(device)
 
 
 classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']  # other = undefined / land / no data
@@ -57,10 +57,10 @@ classes = ['other', '<1', '1-3', '3-5', '5-7', '7-9', '9-10', 'fast_ice']  # oth
 palette0 = np.array([
     [0, 0, 0],
     [0, 0, 255],
-    [0, 255, 0],
     [255, 255, 0],
+    [255, 128, 0],
     [255, 0, 0],
-    [255, 255, 255],
+    [0, 128, 0],
 ])  # TODO
 
 
@@ -99,9 +99,9 @@ def coll_fn(batch_):
 
 def item_getter(path: str, file_name: str, transforms=transforms_val, val=False) -> (np.ndarray, np.ndarray):
     i_ = 'val_' if val else ''
-    image = np.load(f'{path}/{i_}data10-2/{file_name}')
+    image = np.load(f'{path}/{i_}data10-5/{file_name}')
     # image = normalize(np.load(f'{path}/{i_}data10-2/{file_name}'))
-    label = np.load(f'{path}/{i_}label10-2_ignore=-1_0/{file_name}')
+    label = np.load(f'{path}/{i_}label10-5_0/{file_name}')
 
     img = image.transpose((1, 2, 0))
     augmented = transforms(image=img, mask=label[:, :])

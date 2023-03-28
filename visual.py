@@ -30,8 +30,8 @@ def un_normalize(np_img: np.ndarray):
 
 # palette = np.array([i for i in range(8)])
 data_path = 'D:/dataset_new'
-model_path = 'D:/pts_24.03/v10-2+_ign_Unet_resnet18_v10-2+_ign_Unet_resnet18_2.pth'
-mod = 'resnet'
+model_path = 'D:/PROJ/v10-5_v10-5_timm__4.pth'
+mod = 'timm'
 BATCH_SIZE = 1
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -41,9 +41,9 @@ def save_t(full_name, im, prof):
         src.write(im)
 
 
-lst = list(np.random.permutation(os.listdir(data_path + '/label10-2_ignore=-1_0')))
-lst = ['EA_0301T232157_22_1_3.npy']
-for file_name in tqdm(lst[:1]):
+lst = list(np.random.permutation(os.listdir(data_path + '/label10-5_0')))
+# lst = ['EA_0301T232157_22_1_3.npy']
+for file_name in tqdm(lst):
     model_ft.to(device)
     state_dict = torch.load(model_path, map_location=device)['model_state_dict']
     model_ft.load_state_dict(state_dict, strict=False)
@@ -68,19 +68,19 @@ for file_name in tqdm(lst[:1]):
     profile['count'] = 4
     images = np.empty(shape=(4, 256, 256))
     images[:] = np.asarray(inputs[0, :, :])
-    save_t(f"D:/M/10-2+/i/{name}.tiff", np.asarray(images) * 255, profile)  # image
+    save_t(f"D:/w/10-5/i/{name}.tiff", np.asarray(images) * 255, profile)  # image
 
     profile['count'] = 3
-    save_t(f"D:/M/10-2+/p_{mod}_real/{name}.tiff", palette0[1 + y_pred[0, :, :]].astype(np.uint8).transpose((2, 0, 1)),
+    save_t(f"D:/w/10-5/p_{mod}_real/{name}.tiff", palette0[1 + y_pred[0, :, :]].astype(np.uint8).transpose((2, 0, 1)),
            profile)  # predict
     # y_pred[0, labels[0, :, :] == -1] = -1
     # save_t(f"D:/M/10-2+/p_{mod}/{name}.tiff", palette0[1 + y_pred[0, :, :]].astype(np.uint8).transpose((2, 0, 1)),
     #        profile)  # predict
 
-    save_t(f"D:/M/10-2+/l_{mod}/{name}.tiff", palette0[1 + labels[0, :, :]].astype(np.uint8).transpose((2, 0, 1)),
+    save_t(f"D:/w/10-5/l_{mod}/{name}.tiff", palette0[1 + labels[0, :, :]].astype(np.uint8).transpose((2, 0, 1)),
            profile)  # label
 
-    output = torch.LongTensor(y_pred[0, :, :])
+    """output = torch.LongTensor(y_pred[0, :, :])
     target = torch.LongTensor(labels[0, :, :])
     try:
         print(sum(sum(np.asarray(torch.LongTensor(y_pred[0, :, :] == -1)))))
@@ -104,7 +104,7 @@ for file_name in tqdm(lst[:1]):
 
         # print(tuple(stats)[0].shape)
         print(float(f1_score(*tuple(stats), reduction='macro') * inputs.size(0)))
-        print(float(f1_score(*st, reduction='macro') * inputs.size(0)))
+        print(float(f1_score(*st, reduction='macro') * inputs.size(0)))"""
 
     # im = Image.fromarray(palette0[1 + y_pred[0, :, :]].astype(np.uint8))
     # im.save(f"D:/M/10-2+/p/{name}.gif")
