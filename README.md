@@ -6,4 +6,4 @@ This repo contains source code for:
 2. EDA;
 3. model training.
 
-Received model is used in this [project]([url](https://github.com/t0pcup/diploma/tree/master)).
+Received model is used in this [project](https://github.com/t0pcup/diploma/tree/master).
