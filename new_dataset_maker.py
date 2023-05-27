@@ -17,11 +17,11 @@ workspace = 'C:/files/dag_img_2'
 
 # setup_logging(0)
 setup_logging(verbose=3, no_progress_bar=False)
-os.environ["EODAG__PEPS__AUTH__CREDENTIALS__USERNAME"] = "katarina.spasenovic@omni-energy.it"
-os.environ["EODAG__PEPS__AUTH__CREDENTIALS__PASSWORD"] = "M@rkon!1997"
+os.environ["EODAG__PEPS__AUTH__CREDENTIALS__USERNAME"] = "###############################"
+os.environ["EODAG__PEPS__AUTH__CREDENTIALS__PASSWORD"] = "###########"
 
 # os.environ["EODAG__ONDA__AUTH__CREDENTIALS__USERNAME"] = ["t0pcup@yandex.ru", "kdmikhaylova_1@edu.hse.ru"][0]
-# os.environ["EODAG__ONDA__AUTH__CREDENTIALS__PASSWORD"] = ["jL7-iq4-GBM-RPe", "b8k-Jyy-NzS-jZ6"][0]
+# os.environ["EODAG__ONDA__AUTH__CREDENTIALS__PASSWORD"] = ["###############", "###############"][0]
 
 if not os.path.isdir(workspace):
     os.mkdir(workspace)

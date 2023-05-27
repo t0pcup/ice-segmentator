@@ -109,9 +109,9 @@ print("Std of the image:", std)
 # session = boto3.session.Session()
 # s3_client = session.client(
 #     service_name='s3',
-#     endpoint_url='https://hb.bizmrg.com',
-#     aws_access_key_id='puEM2LPKPZGpnLPMpqBDoM',
-#     aws_secret_access_key='cHDf7RXTFG82gwyXsQDh5zzVsMavbGBhVsbDL2V74DXs'
+#     endpoint_url='###########',
+#     aws_access_key_id='###########',
+#     aws_secret_access_key='###########'
 # )
 #
 # bucket_name = 'ds-aurora'

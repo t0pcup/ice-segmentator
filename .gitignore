@@ -1,2 +1,4 @@
-
+.gitignore
 __pycache__/my_lib.cpython-310.pyc
+__pycache__
+.idea

@@ -108,7 +108,7 @@ def stand(im_: np.ndarray, single_stand=False) -> np.ndarray:
 #     url2 = None
 # order_id = sys.argv[3]
 # model_name = sys.argv[4]
-url = 'https://services.sentinel-hub.com/ogc/wms/2cea12cc-7019-40a1-aa32-5948e8629ba9?REQUEST=GetMap&CRS=CRS:84&BBOX' \
+url = 'https://services.sentinel-hub.com/ogc/wms/########-####-####-####-############?REQUEST=GetMap&CRS=CRS:84&BBOX' \
       '=12.44693,41.870072,12.541001,41.917096&LAYERS=VV&WIDTH=512&HEIGHT=343&FORMAT=image/jpeg&TIME=2023-02-27/2023' \
       '-03-27' \
     .replace('jpeg', 'tiff')
